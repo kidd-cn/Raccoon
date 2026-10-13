@@ -12,7 +12,7 @@ public struct TmutilSnapshotCleaner: SnapshotCleanerServicing {
     public func listSnapshots() async -> [String] {
         // tmutil 是阻塞子进程:detached 任务仍在全局协作池上执行,并不减少协作线程占用;
         // 包 detached 的目的是避免调用方(当前)上下文被长时间阻塞。
-        let out = await Task.detached(priority: .utility) {
+        let (out, _) = await Task.detached(priority: .utility) {
             Self.run(["listlocalsnapshots", "/"])
         }.value
         return out
@@ -21,10 +21,11 @@ public struct TmutilSnapshotCleaner: SnapshotCleanerServicing {
     }
 
     public func deleteSnapshot(_ date: String) async -> Bool {
-        let out = await Task.detached(priority: .utility) {
+        // M1:成功主信号是 tmutil 退出码 0(失败 exit 70);字符串启发式已废弃。
+        let (_, status) = await Task.detached(priority: .utility) {
             Self.run(["deletelocalsnapshots", date])
         }.value
-        return out.localizedCaseInsensitiveContains("deleted")
+        return status == 0
     }
 
     /// 纯函数,Task 4 补测:"com.apple.TimeMachine.2026-10-13-120000.local" → "2026-10-13-120000"
@@ -35,16 +36,16 @@ public struct TmutilSnapshotCleaner: SnapshotCleanerServicing {
         return String(line.dropFirst(prefix.count).dropLast(suffix.count))
     }
 
-    static func run(_ args: [String]) -> String {
+    static func run(_ args: [String]) -> (String, Int32) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/tmutil")
         p.arguments = args
         let pipe = Pipe()
         p.standardOutput = pipe
         p.standardError = FileHandle.nullDevice   // 排空 stderr,防 64KB 管道写满阻塞死锁
-        do { try p.run() } catch { return "" }
+        do { try p.run() } catch { return ("", -1) }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
-        return String(decoding: data, as: UTF8.self)
+        return (String(decoding: data, as: UTF8.self), p.terminationStatus)
     }
 }
