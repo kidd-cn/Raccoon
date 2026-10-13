@@ -37,11 +37,6 @@ final class ProgressRecorder: @unchecked Sendable {
 
     init() { dir = NSTemporaryDirectory() + "raccoon-exec-\(UUID().uuidString)" }
 
-    deinit {
-        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir)
-        try? FileManager.default.removeItem(atPath: dir)
-    }
-
     func item(_ path: String, size: Int64 = 10, action: CleanAction = .trash) -> CleanItem {
         CleanItem(path: path, sizeBytes: size, action: action)
     }
@@ -72,6 +67,22 @@ final class ProgressRecorder: @unchecked Sendable {
         let report = await exec.clean([item("\(NSHomeDirectory())/Documents/thesis.docx", size: 999)])
         #expect(report.trashedCount == 0)
         #expect(report.skipped.count == 1)
+        #expect(report.skipped[0].reason == "protected")
+        let calls = await trash.calls
+        #expect(calls.isEmpty)
+    }
+
+    @Test func clean_rejectsRelativePaths() async {
+        // isDenied 契约要求绝对路径:相对路径按 CWD 解析可绕过组件前缀匹配 → 引擎层硬拒
+        let trash = MockTrash(outcome: .trashed)
+        let exec = CleanExecutor(trash: trash, protection: ProtectionStore(), snapshots: MockSnapshots())
+        let report = await exec.clean([
+            item("Documents/thesis.docx", size: 999),
+            item("", size: 1),
+        ])
+        #expect(report.trashedCount == 0)
+        #expect(report.skipped.count == 2)
+        #expect(report.skipped.allSatisfy { $0.reason == "invalid-path" })
         let calls = await trash.calls
         #expect(calls.isEmpty)
     }

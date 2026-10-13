@@ -3,7 +3,7 @@ import Foundation
 public enum TrashOutcome: Equatable, Sendable {
     case trashed
     case vanished
-    case skipped(reason: String)   // 稳定代码:"no-permission" / "other"
+    case skipped(reason: String)   // 稳定代码:"no-permission" / "protected" / "snapshot-failed" / "other"
 }
 
 public protocol TrashServicing: Sendable {
@@ -68,6 +68,12 @@ public struct CleanExecutor: Sendable {
         var freed: Int64 = 0, trashed = 0, vanished = 0, snapshotCount = 0
         var skipped: [SkippedItem] = []
         for (i, item) in items.enumerated() {
+            // 绝对路径守卫:isDenied 契约要求绝对路径,相对路径按 CWD 解析可绕过组件前缀匹配
+            guard item.path.hasPrefix("/") else {
+                skipped.append(SkippedItem(path: item.path, reason: "invalid-path"))
+                onProgress?(i + 1, items.count)
+                continue
+            }
             // 纵深防御:删除前最后一道硬保护校验
             if item.action == .trash && protection.isDenied(item.path) {
                 skipped.append(SkippedItem(path: item.path, reason: "protected"))

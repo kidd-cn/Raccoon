@@ -35,6 +35,7 @@ public struct ProtectionStore: Sendable {
     /// 命中即拒绝。契约:path 必须为绝对路径,且与规则根同形(同为原始形式,或同为
     /// resolvingSymlinksInPath 形式);规则根的符号链接别名由 RuleStore 校验时以原始与
     /// resolvingSymlinksInPath 两种形式一并拒绝(后续任务的义务)。
+    /// isDenied→trash 之间的 TOCTOU 窗口为已接受风险(微秒级,最坏后果是受保护文件进废纸篓可恢复,非销毁)。
     public func isDenied(_ path: String) -> Bool { isHardProtected(path) || isUserExcluded(path) }
 
     /// 组件级前缀(大小写不敏感):path == root 或 path 位于 root 之下。

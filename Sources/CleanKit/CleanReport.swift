@@ -27,6 +27,9 @@ public protocol HistoryStoring: Sendable {
 
 /// ~/Library/Application Support/Raccoon/history.json(测试可注入目录)
 public struct JSONHistoryStore: HistoryStoring {
+    /// 静态锁:跨实例互斥,防多实例并发写互相覆盖(read-modify-write 竞态)。
+    private static let lock = NSLock()
+
     let url: URL
     // FileManager 官方文档保证线程安全且此处不可变,但 ObjC 类未标注 Sendable → 显式豁免。
     nonisolated(unsafe) let fm: FileManager
@@ -40,14 +43,31 @@ public struct JSONHistoryStore: HistoryStoring {
     }
 
     public func append(_ report: CleanReport) throws {
-        var all = (try? loadAll()) ?? []
-        all.append(report)
-        let data = try JSONEncoder().encode(all)
-        try data.write(to: url, options: .atomic)
+        try Self.lock.withLock {
+            // 锁内不可调用 self.loadAll()(NSLock 非重入 → 死锁),此处内联读取。
+            var all: [CleanReport] = []
+            do {
+                if fm.fileExists(atPath: url.path) {
+                    all = try JSONDecoder().decode([CleanReport].self, from: Data(contentsOf: url))
+                }
+            } catch {
+                // 损坏文件留存侧旁备份,不静默清史;以空历史继续。
+                let stamp = ISO8601DateFormatter().string(from: Date())
+                let backup = url.deletingLastPathComponent()
+                    .appendingPathComponent("history-corrupted-\(stamp).json")
+                try? fm.moveItem(at: url, to: backup)
+                all = []
+            }
+            all.append(report)
+            let data = try JSONEncoder().encode(all)
+            try data.write(to: url, options: .atomic)
+        }
     }
 
     public func loadAll() throws -> [CleanReport] {
-        guard fm.fileExists(atPath: url.path) else { return [] }
-        return try JSONDecoder().decode([CleanReport].self, from: Data(contentsOf: url))
+        try Self.lock.withLock {
+            guard fm.fileExists(atPath: url.path) else { return [] }
+            return try JSONDecoder().decode([CleanReport].self, from: Data(contentsOf: url))
+        }
     }
 }

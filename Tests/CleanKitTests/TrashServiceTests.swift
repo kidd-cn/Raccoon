@@ -12,7 +12,9 @@ import Testing
             Issue.record("unexpected"); return
         }
         let other = NSError(domain: NSPOSIXErrorDomain, code: 16)   // EBUSY
-        guard case .skipped = TrashService.map(error: other) else { Issue.record("unexpected"); return }
+        guard case .skipped(let otherReason) = TrashService.map(error: other), otherReason == "other" else {
+            Issue.record("unexpected"); return
+        }
     }
 
     // 真实 trash:临时文件 → 原位置消失(进入用户废纸篓,手动核对可恢复)
