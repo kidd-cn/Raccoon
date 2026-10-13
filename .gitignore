@@ -1,6 +1,9 @@
 # Visual companion / brainstorm session artifacts
 .superpowers/
 
+# Git worktrees
+.worktrees/
+
 # macOS
 .DS_Store
 
