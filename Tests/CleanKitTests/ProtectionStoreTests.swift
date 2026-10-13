@@ -66,4 +66,24 @@ struct ProtectionStoreTests {
             #expect(ProtectionStore.rulePathConflictsWithProtection(evil, hardRoots: s.hardRoots), Comment(rawValue: evil))
         }
     }
+
+    // —— 审查修复回归(C1 / I2 / M1)—
+
+    @Test func testC1_caseInsensitiveProtection() {
+        let s = ProtectionStore()
+        #expect(s.isHardProtected("\(home)/documents/file.txt"))
+        #expect(s.isHardProtected("\(home)/Library/PREFERENCES/com.apple.plist"))
+        #expect(ProtectionStore.rulePathConflictsWithProtection("\(home)/Library/PREFERENCES", hardRoots: ProtectionStore().hardRoots))
+    }
+
+    @Test func testI2_applicationsWildcardIncludeRejected() {
+        #expect(!ProtectionStore.isAllowedRuleRoot("/Applications", include: ["*"]))
+        #expect(!ProtectionStore.isAllowedRuleRoot("/Applications", include: ["Install*"]))
+        #expect(ProtectionStore.isAllowedRuleRoot("/Applications", include: ["Install macOS *.app"]))
+    }
+
+    @Test func testM1_rootPathConflictsWithEverything() {
+        #expect(ProtectionStore.rulePathConflictsWithProtection("/", hardRoots: ["\(home)/Documents"]))
+        #expect(ProtectionStore.rulePathConflictsWithProtection("\(home)/Library/Caches", hardRoots: ["/"]))
+    }
 }
