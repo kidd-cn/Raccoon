@@ -777,7 +777,7 @@ public struct AppIdentityResolver: Sendable {
     public static func bundleIDComponent(in path: String) -> String? {
         for comp in path.split(separator: "/").reversed() {
             let s = String(comp)
-            let parts = s.split(separator: ".")
+            let parts = s.split(separator: ".", omittingEmptySubsequences: false)   // 空段非法:"a..b" → nil
             if parts.count >= 2, parts.allSatisfy({
                 !$0.isEmpty && $0.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" }
             }) {
