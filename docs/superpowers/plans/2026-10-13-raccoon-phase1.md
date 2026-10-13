@@ -677,7 +677,7 @@ git add -A && git commit -m "feat(CleanKit): 废纸篓服务 + 清理执行器(�
 
 **Files:**
 - Test: `Tests/CleanKitTests/SnapshotCleanerTests.swift`、`Tests/CleanKitTests/SystemIntegrationTests.swift`
-- Modify: `Sources/CleanKit/SnapshotCleaner.swift`(无改动,仅补测)
+- Modify: `Sources/CleanKit/SnapshotCleaner.swift`(仅一处:`run(_:)` 返回 `(stdout, terminationStatus)`,`deleteSnapshot` 改以退出码 0 为成功主信号——审查 M1;其余不动)
 - Create: `Sources/CleanKit/SystemIntegration.swift`
 
 - [ ] **Step 1: 写失败测试**
@@ -693,6 +693,12 @@ final class SnapshotCleanerTests: XCTestCase {
         XCTAssertEqual(TmutilSnapshotCleaner.parseSnapshotDate("com.apple.TimeMachine.2026-10-13-120000.local"), "2026-10-13-120000")
         XCTAssertNil(TmutilSnapshotCleaner.parseSnapshotDate("Snapshots for /:"))
         XCTAssertNil(TmutilSnapshotCleaner.parseSnapshotDate("com.apple.TimeMachine..local"))
+    }
+
+    // M1 回归:删除不存在的快照,tmutil exit 70 → false(以退出码判定,真实子进程集成测试)
+    func testDeleteSnapshot_bogusDateReturnsFalse() async {
+        let ok = await TmutilSnapshotCleaner().deleteSnapshot("2000-01-01-000000")
+        XCTAssertFalse(ok)
     }
 }
 ```
@@ -741,6 +747,8 @@ Run: `swift test --filter 'SnapshotCleanerTests|SystemIntegrationTests'`
 Expected: 编译错误(`appName(for:)` 未定义)
 
 - [ ] **Step 3: 实现**
+
+**先做(SnapshotCleaner M1 修复)**:`run(_ args: [String]) -> String` 改为 `run(_ args: [String]) -> (String, Int32)`(返回 stdout 与 terminationStatus;spawn 失败返回 `("", -1)`),`standardError` 保持 `FileHandle.nullDevice`;`listSnapshots` 取 `let (out, _)` 只用输出;`deleteSnapshot` 改为 `let (_, status) = ...; return status == 0`(tmutil 删除失败 exit 70,废弃字符串启发式判定)。
 
 `Sources/CleanKit/SystemIntegration.swift`:
 
