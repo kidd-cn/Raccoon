@@ -10,7 +10,8 @@ public struct TmutilSnapshotCleaner: SnapshotCleanerServicing {
     public init() {}
 
     public func listSnapshots() async -> [String] {
-        // tmutil 是阻塞子进程:detached 移出协作池线程,避免占死 Swift 并发线程
+        // tmutil 是阻塞子进程:detached 任务仍在全局协作池上执行,并不减少协作线程占用;
+        // 包 detached 的目的是避免调用方(当前)上下文被长时间阻塞。
         let out = await Task.detached(priority: .utility) {
             Self.run(["listlocalsnapshots", "/"])
         }.value

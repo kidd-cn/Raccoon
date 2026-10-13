@@ -68,19 +68,20 @@ public struct CleanExecutor: Sendable {
         var freed: Int64 = 0, trashed = 0, vanished = 0, snapshotCount = 0
         var skipped: [SkippedItem] = []
         for (i, item) in items.enumerated() {
-            // 绝对路径守卫:isDenied 契约要求绝对路径,相对路径按 CWD 解析可绕过组件前缀匹配
-            guard item.path.hasPrefix("/") else {
-                skipped.append(SkippedItem(path: item.path, reason: "invalid-path"))
-                onProgress?(i + 1, items.count)
-                continue
-            }
-            // 纵深防御:删除前最后一道硬保护校验
-            if item.action == .trash && protection.isDenied(item.path) {
-                skipped.append(SkippedItem(path: item.path, reason: "protected"))
-                onProgress?(i + 1, items.count); continue
-            }
             switch item.action {
             case .trash:
+                // 绝对路径守卫:isDenied 契约要求绝对路径,相对路径按 CWD 解析可绕过组件前缀匹配。
+                // 仅作用于 .trash 分支:tmutilThin 项的 path 是 "tmutil://<date>" 伪标签,不触达文件系统。
+                guard item.path.hasPrefix("/") else {
+                    skipped.append(SkippedItem(path: item.path, reason: "invalid-path"))
+                    onProgress?(i + 1, items.count)
+                    continue
+                }
+                // 纵深防御:删除前最后一道硬保护校验
+                if protection.isDenied(item.path) {
+                    skipped.append(SkippedItem(path: item.path, reason: "protected"))
+                    onProgress?(i + 1, items.count); continue
+                }
                 switch await trash.trash(item.path) {
                 case .trashed: trashed += 1; freed += item.sizeBytes
                 case .vanished: vanished += 1

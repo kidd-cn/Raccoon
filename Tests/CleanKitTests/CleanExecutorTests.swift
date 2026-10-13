@@ -73,14 +73,17 @@ final class ProgressRecorder: @unchecked Sendable {
     }
 
     @Test func clean_rejectsRelativePaths() async {
-        // isDenied 契约要求绝对路径:相对路径按 CWD 解析可绕过组件前缀匹配 → 引擎层硬拒
+        // isDenied 契约要求绝对路径:相对路径按 CWD 解析可绕过组件前缀匹配 → 引擎层硬拒;
+        // 但守卫只作用于 .trash 分支——tmutil 伪路径(Task 9 ScanHit 构造)不触达文件系统,不得误拦。
         let trash = MockTrash(outcome: .trashed)
-        let exec = CleanExecutor(trash: trash, protection: ProtectionStore(), snapshots: MockSnapshots())
+        let exec = CleanExecutor(trash: trash, protection: ProtectionStore(), snapshots: MockSnapshots(listed: []))
         let report = await exec.clean([
             item("Documents/thesis.docx", size: 999),
             item("", size: 1),
+            item("tmutil://2026-10-13-120000", size: 0, action: .tmutilThin(date: "2026-10-13-120000")),
         ])
         #expect(report.trashedCount == 0)
+        #expect(report.snapshotCount == 1)   // 伪路径不被守卫拦截
         #expect(report.skipped.count == 2)
         #expect(report.skipped.allSatisfy { $0.reason == "invalid-path" })
         let calls = await trash.calls
@@ -90,7 +93,7 @@ final class ProgressRecorder: @unchecked Sendable {
     @Test func testClean_progressReportsEachItem() async {
         let exec = CleanExecutor(trash: MockTrash(outcome: .trashed), protection: ProtectionStore(), snapshots: MockSnapshots())
         let seen = ProgressRecorder()
-        _ = await exec.clean([item("a"), item("b"), item("c")]) { done, total in seen.record(done, total) }
+        _ = await exec.clean([item(dir + "/a"), item(dir + "/b"), item(dir + "/c")]) { done, total in seen.record(done, total) }
         let s = seen.snapshot
         #expect(s.count == 3)
         if s.count == 3 {
