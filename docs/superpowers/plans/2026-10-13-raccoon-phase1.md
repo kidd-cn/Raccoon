@@ -6,7 +6,9 @@
 
 **Architecture:** 单个 SwiftPM 包,4 个 target 分层:`CleanKit`(保护/删除/快照)← `ScanKit`(规则库/扫描引擎)← `AppCore`(ViewModel/服务装配)← `Raccoon`(SwiftUI 界面)。核心层不 import SwiftUI,全部可单测。开发机仅有 Command Line Tools(Swift 6.4),用 `swift build / test / run` 开发,`Scripts/bundle-app.sh` 组装 .app。
 
-**Tech Stack:** Swift 6(strict concurrency)、SwiftUI、Foundation、AppKit(仅 NSWorkspace/NSOpenPanel)、XCTest。零第三方依赖。
+**Tech Stack:** Swift 6(strict concurrency)、SwiftUI、Foundation、AppKit(仅 NSWorkspace/NSOpenPanel)、swift-testing。零第三方依赖。
+
+> **测试框架环境适配(执行期确认):** 本机仅有 Command Line Tools(Swift 6.4),**没有 XCTest**。计划中出现的 XCTest 代码一律按此映射翻译执行:`import XCTest` → `import Testing`;`final class X: XCTestCase` → `@Suite final class X`(有 setUp/tearDown 时用 `init`/`deinit` 对应);`func testX()` → `@Test func X()`;`XCTAssertEqual(a,b)` → `#expect(a == b)`;`XCTAssertTrue/False` → `#expect(...)`/`#expect(!...)`;`XCTAssertNil/NotNil` → `#expect(x == nil)`/`#expect(x != nil)`;`try XCTUnwrap(x)` → `try #require(x)`;`XCTFail("m")` → `Issue.record("m")`;`try XCTSkipIf(c)` → `try #require(!c)`。Task 1 已验证此映射可用。
 
 **规格:** `docs/superpowers/specs/2026-10-13-raccoon-phase1-design.md`(实现中与规格冲突时以规格为准,并回头修订计划)
 
