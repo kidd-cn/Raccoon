@@ -1,0 +1,20 @@
+# Visual companion / brainstorm session artifacts
+.superpowers/
+
+# macOS
+.DS_Store
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.ipa
+
+# SwiftPM
+.build/
+Packages/**/.build/
+.swiftpm/
+
+# Claude local settings
+.claude/settings.local.json
