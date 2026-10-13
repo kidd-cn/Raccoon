@@ -379,9 +379,16 @@ import XCTest
 
 actor MockTrash: TrashServicing {
     let outcome: TrashOutcome
+    let vanishedFor: Set<String>   // 指定路径强制返回 .vanished(模拟文件已消失)
     private(set) var calls: [String] = []
-    init(outcome: TrashOutcome) { self.outcome = outcome }
-    func trash(_ path: String) async -> TrashOutcome { calls.append(path); return outcome }
+    init(outcome: TrashOutcome, vanishedFor: [String] = []) {
+        self.outcome = outcome
+        self.vanishedFor = Set(vanishedFor)
+    }
+    func trash(_ path: String) async -> TrashOutcome {
+        calls.append(path)
+        return vanishedFor.contains(path) ? .vanished : outcome
+    }
 }
 
 actor MockSnapshots: SnapshotCleanerServicing {
@@ -405,7 +412,7 @@ final class CleanExecutorTests: XCTestCase {
     }
 
     func testClean_aggregatesReport_andSkipsProtected() async {
-        let trash = MockTrash(outcome: .trashed)
+        let trash = MockTrash(outcome: .trashed, vanishedFor: ["/nonexistent/x"])
         let protection = ProtectionStore(userExclusions: [dir + "/excluded"])
         let exec = CleanExecutor(trash: trash, protection: protection, snapshots: MockSnapshots())
         let report = await exec.clean([
@@ -1964,9 +1971,16 @@ struct FakeScanService: ScanServicing {
 
 actor MockTrash: TrashServicing {
     let outcome: TrashOutcome
+    let vanishedFor: Set<String>   // 指定路径强制返回 .vanished(模拟文件已消失)
     private(set) var calls: [String] = []
-    init(outcome: TrashOutcome) { self.outcome = outcome }
-    func trash(_ path: String) async -> TrashOutcome { calls.append(path); return outcome }
+    init(outcome: TrashOutcome, vanishedFor: [String] = []) {
+        self.outcome = outcome
+        self.vanishedFor = Set(vanishedFor)
+    }
+    func trash(_ path: String) async -> TrashOutcome {
+        calls.append(path)
+        return vanishedFor.contains(path) ? .vanished : outcome
+    }
 }
 ```
 
