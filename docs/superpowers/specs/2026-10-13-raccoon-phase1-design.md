@@ -13,30 +13,30 @@
 
 ## 2. 分期路线图(总览)
 
-| 阶段 | 内容 | 状态 |
-|------|------|------|
-| 一期 | 应用骨架 + 核心清理(本文档) | 设计中 |
-| 二期 | 应用卸载 + 残留清理 | 规划 |
-| 三期 | AI 工具清理(Claude/Cursor/Ollama 等) | 规划 |
-| 四期 | 磁盘分析(treemap) | 规划 |
-| 五期 | 状态监控 + 系统优化 | 规划 |
-| 六期 | 菜单栏工具集 | 规划 |
+| 阶段 | 内容                              | 状态  |
+| -- | ------------------------------- | --- |
+| 一期 | 应用骨架 + 核心清理(本文档)                | 设计中 |
+| 二期 | 应用卸载 + 残留清理                     | 规划  |
+| 三期 | AI 工具清理(Claude/Cursor/Ollama 等) | 规划  |
+| 四期 | 磁盘分析(treemap)                   | 规划  |
+| 五期 | 状态监控 + 系统优化                     | 规划  |
+| 六期 | 菜单栏工具集                          | 规划  |
 
 后续每期独立走 spec → 计划 → 实现 流程。一期的架构决策(侧边栏骨架、规则库、ScanKit/CleanKit 拆分)为后续所有期次提供地基。
 
 ## 3. 技术决策
 
-| 决策项 | 选择 | 理由 |
-|--------|------|------|
-| 技术栈 | Swift 6 + SwiftUI | 文件扫描性能敏感;系统能力(MenuBarExtra、ServiceManagement)开箱即用;原生质感 |
-| 最低系统 | macOS 14 Sonoma | SwiftUI API 成熟,覆盖绝大多数活跃设备 |
-| 项目结构 | Xcode 工程 + 本地 SPM packages(`ScanKit`、`CleanKit`) | 核心引擎与 UI 解耦,可独立测试 |
-| 第三方依赖 | 一期为零 | 全部使用系统框架 |
-| 界面语言 | 简体中文 + English(String Catalog) | 开源项目基本要求 |
-| 许可证 | MIT | |
-| Bundle ID | `com.raccooncleaner.Raccoon` | 可调整 |
-| 视觉风格 | 原生极简:纯系统控件 + SF Symbols,自动浅色/深色模式 | 维护成本最低(用户已确认) |
-| 发布签名 | 一期本地开发用 adhoc;正式发布需 Developer ID 签名 + 公证(需要 Apple Developer 账号,发布前再定) | 开源免费,无授权/支付体系 |
+| 决策项       | 选择                                                                    | 理由                                                     |
+| --------- | --------------------------------------------------------------------- | ------------------------------------------------------ |
+| 技术栈       | Swift 6 + SwiftUI                                                     | 文件扫描性能敏感;系统能力(MenuBarExtra、ServiceManagement)开箱即用;原生质感 |
+| 最低系统      | macOS 14 Sonoma                                                       | SwiftUI API 成熟,覆盖绝大多数活跃设备                              |
+| 项目结构      | SwiftPM 单包多 target:`Sources/Raccoon`(可执行)+ `AppCore` / `ScanKit` / `CleanKit`;`Scripts/bundle-app.sh` 组装 .app | 开发机仅有 Command Line Tools(无完整 Xcode),`swift build / test / run` 全流程 CLI 可用;target 间依赖显式声明,与多包解耦等价 |
+| 第三方依赖     | 一期为零                                                                  | 全部使用系统框架                                               |
+| 界面语言      | 简体中文 + English(`zh-Hans.lproj` / `en.lproj` 的 Localizable.strings)     | 开源项目基本要求;.lproj 结构对纯 SwiftPM 构建最稳妥 |
+| 许可证       | MIT                                                                   |                                                        |
+| Bundle ID | `com.raccooncleaner.Raccoon`                                          | 可调整                                                    |
+| 视觉风格      | 原生极简:纯系统控件 + SF Symbols,自动浅色/深色模式                                     | 维护成本最低(用户已确认)                                          |
+| 发布签名      | 一期本地开发用 adhoc;正式发布需 Developer ID 签名 + 公证(需要 Apple Developer 账号,发布前再定) | 开源免费,无授权/支付体系                                          |
 
 ## 4. 总体架构
 
@@ -53,7 +53,7 @@
 - **AppShell**:侧边栏列出 清理(可用)、卸载 / AI 清理 / 磁盘分析 / 监控(禁用,标注"即将推出")。骨架从第一天就是六期的形状。
 - **ScanViewModel**:发起扫描、消费进度事件流、聚合类别小计、管理勾选状态与"已选大小"联动。
 - **CleanupFlow**:确认弹窗、逐项删除编排、结果报告。
-- **ScanKit / CleanKit**:独立 SPM 模块,纯 Foundation + Concurrency,不依赖任何 UI。
+- **ScanKit / CleanKit**:独立 target(SPM 依赖显式声明),纯 Foundation + Concurrency,不依赖任何 UI。
 
 ## 5. 规则库设计(核心资产)
 
@@ -94,22 +94,26 @@
 ### 5.3 首发内置规则清单(初版,实现期可增删)
 
 **system(系统垃圾,safe)**
+
 - `~/Library/Caches`(用户应用缓存总目录)
 - `~/Library/Logs`、`~/Library/Logs/DiagnosticReports`(日志与用户级崩溃报告;系统级 `/Library` 在硬保护清单内,一期不扫)
 - 用户主目录下的 `.DS_Store`(匹配型规则:`include: [".DS_Store"]`;遍历整个主目录耗时较长,安排为扫描中的低优先级任务,受条目上限约束)
 
 **dev(开发工具缓存,safe 为主)**
+
 - Xcode:`~/Library/Developer/Xcode/DerivedData`、`~/Library/Developer/Xcode/iOS DeviceSupport`
 - Xcode Archives:`~/Library/Developer/Xcode/Archives`(**cautious**,含历史 ipa 归档)
 - 模拟器:`~/Library/Developer/CoreSimulator/Devices`(**cautious**,模拟器数据)
 - 包管理缓存:`~/.npm`、`~/Library/Caches/pip`、`~/.gradle/caches`、`~/Library/Caches/Homebrew`、`~/Library/Caches/org.swift.swiftpm`、`~/Library/Caches/CocoaPods`、`~/.cache`(含 uv/pip 新版缓存,**cautious**,该目录也被部分工具用作数据目录)
 
 **apps(常见应用缓存,safe 为主)**
+
 - 浏览器:Chrome / Edge / Brave / Firefox 的 `~/Library/Caches/<bundle>`(safe)
 - Spotify、Slack、Discord、VS Code(`~/Library/Application Support/Code/Cache*` 与 `CachedData`)
 - 微信:`~/Library/Containers/com.tencent.xinWeChat` 下缓存子目录(**cautious**,聊天记录同容器,必须精确到缓存子目录并默认不勾选)
 
 **cautious(谨慎清理项,一律默认不勾选、橙色标识、单独确认)**
+
 - iOS 设备备份:`~/Library/Application Support/MobileSync/Backup`
 - 旧 macOS 安装器:`/Applications/Install macOS *.app`(唯一的非主目录规则根,见 5.1 例外)
 - 本地 Time Machine 快照:`action: "tmutil-thin"`,经 `tmutil` 列出/清理,专用 cautious 处理器,不逐文件删除
@@ -179,15 +183,15 @@ ScanViewModel:UI 实时显示已发现条数与字节量
 
 **任何异常都不中断、不丢数据。**
 
-| 场景 | 处理 |
-|------|------|
-| 目录权限拒绝(TCC) | 跳过并计数;失败面过大时,完成报告引导授予"完全磁盘访问权限"(深链系统设置) |
-| 扫描后文件被应用自行删除 | `trashItem` 报不存在 → 计为"已消失",不算错误 |
-| 用户中途取消扫描 | 丢弃本轮结果,状态回 idle |
-| 清理中用户退出 | 逐项执行语义保证已完成项安全;无"半删状态",重扫即可 |
-| 单规则条目超上限 | 截断 + "未完全扫描"标注 |
-| rules.json 损坏/校验失败 | 拒绝加载该条并回退 bundle 内置权威副本;绝不使用半套规则静默运行 |
-| tmutil 不可用/失败 | 该 cautious 项标记不可用,不影响其他项 |
+| 场景                 | 处理                                      |
+| ------------------ | --------------------------------------- |
+| 目录权限拒绝(TCC)        | 跳过并计数;失败面过大时,完成报告引导授予"完全磁盘访问权限"(深链系统设置) |
+| 扫描后文件被应用自行删除       | `trashItem` 报不存在 → 计为"已消失",不算错误         |
+| 用户中途取消扫描           | 丢弃本轮结果,状态回 idle                         |
+| 清理中用户退出            | 逐项执行语义保证已完成项安全;无"半删状态",重扫即可             |
+| 单规则条目超上限           | 截断 + "未完全扫描"标注                          |
+| rules.json 损坏/校验失败 | 整体解码或版本不兼容 → 抛错并由调用方回退 bundle 内置权威副本;单条规则校验失败 → 仅拒绝该条并记录(`rejected` 列表),其余合法规则照常加载,绝不静默 |
+| tmutil 不可用/失败      | 该 cautious 项标记不可用,不影响其他项                |
 
 ## 9. 测试策略
 
