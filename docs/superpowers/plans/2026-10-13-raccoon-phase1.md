@@ -1413,6 +1413,15 @@ enum ScanFixtures {
         CleanupRule(id: id, category: category, safety: safety, path: path,
                     include: include, exclude: exclude, action: nil, description: nil)
     }
+
+    /// 进度事件累积器:Swift 6 禁止在 @Sendable 闭包里捕获可变局部变量,
+    /// 测试用它收集进度回调(progress 回调实际在调用方任务串行触发,锁仅为类型合规兜底)。
+    final class ProgressLog: @unchecked Sendable {
+        private let lock = NSLock()
+        private var items: [ScanProgress] = []
+        func append(_ p: ScanProgress) { lock.lock(); defer { lock.unlock() }; items.append(p) }
+        var events: [ScanProgress] { lock.lock(); defer { lock.unlock() }; return items }
+    }
 }
 ```
 
@@ -1499,15 +1508,16 @@ final class ScanEngineTests: XCTestCase {
     func testDefaultMode_itemLimitTruncates() async throws {
         let result = try await engine(limit: 2).scan(rules: [ScanFixtures.rule(id: "c", path: root + "/Caches")])
         XCTAssertEqual(result.hits.count, 2)
-        XCTAssertEqual(result.truncatedRuleIDs, ["c"])
+        XCTAssertEqual(result.truncatedRuleIDs, Set(["c"]))   // truncatedRuleIDs 是 Set<String>
     }
 
     func testProgress_eventsPerRule() async throws {
-        var events: [ScanProgress] = []
+        let log = ScanFixtures.ProgressLog()
         _ = try await engine().scan(rules: [
             ScanFixtures.rule(id: "a", path: root + "/Caches"),
             ScanFixtures.rule(id: "b", path: root + "/Logs"),
-        ]) { events.append($0) }
+        ]) { log.append($0) }
+        let events = log.events
         XCTAssertEqual(events.count, 2)
         XCTAssertEqual(events.last?.rulesDone, 2)
         XCTAssertEqual(events.last?.rulesTotal, 2)
@@ -1755,13 +1765,18 @@ public struct ScanEngine: Sendable {
         return outcome
     }
 
-    /// 收尾批量补齐 appName(NSWorkspace 限 MainActor);bundleID 为空的项原样返回。
+    /// 收尾批量补齐 appName(NSWorkspace 限 MainActor)。Task 4 审查义务:NSWorkspace 查询
+    /// 昂贵,必须先按 bundleID 去重再查、一次构建 [bundleID: name] 后回填,禁止逐 hit 查询。
     @MainActor
     static func resolveAppNames(_ hits: [ScanHit], resolver: AppIdentityResolver) -> [ScanHit] {
-        hits.map { hit in
-            guard let bid = hit.bundleID else { return hit }
-            let name = resolver.appName(for: bid)
-            guard name != hit.appName else { return hit }
+        let bundleIDs = Set(hits.compactMap(\.bundleID))
+        guard !bundleIDs.isEmpty else { return hits }
+        var names: [String: String] = [:]
+        for bid in bundleIDs {
+            if let n = resolver.appName(for: bid) { names[bid] = n }
+        }
+        return hits.map { hit in
+            guard let bid = hit.bundleID, let name = names[bid], name != hit.appName else { return hit }
             return ScanHit(ruleID: hit.ruleID, category: hit.category, safety: hit.safety,
                            path: hit.path, sizeBytes: hit.sizeBytes, isDirectory: hit.isDirectory,
                            bundleID: hit.bundleID, appName: name, isAppRunning: hit.isAppRunning,
