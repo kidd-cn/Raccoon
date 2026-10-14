@@ -66,6 +66,11 @@ import CleanKit
     @Test func defaultMode_missingRootYieldsEmpty() async throws {
         let result = try await engine().scan(rules: [ScanFixtures.rule(id: "x", path: root + "/nope")])
         #expect(result.hits.count == 0)
+        #expect(result.permissionSkippedCount == 0)   // 缺失 ≠ 无权限
+        let include = try await engine().scan(
+            rules: [ScanFixtures.rule(id: "y", path: root + "/nope", include: ["*.log"])])
+        #expect(include.hits.isEmpty)
+        #expect(include.permissionSkippedCount == 0)  // include 模式同序
     }
 
     @Test func defaultMode_symlinkChildNotBlownUp() async throws {

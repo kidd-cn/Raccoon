@@ -214,7 +214,10 @@ public struct ScanEngine: Sendable {
         var outcome = RuleOutcome()
         let rootPath = ProtectionStore.normalize(rule.path)
         let fm = deps.fileManager
-        // 与默认模式对称:根存在但不可读 → 显式计数,不与"干净"混淆
+        // 与默认模式对称的根守卫顺序:先"存在且为目录"(缺失根 → 空结果,0 跳过),
+        // 再"可读"(存在但不可读 → 显式计数,不与"干净"混淆)
+        var rootIsDir: ObjCBool = false
+        guard fm.fileExists(atPath: rootPath, isDirectory: &rootIsDir), rootIsDir.boolValue else { return outcome }
         guard fm.isReadableFile(atPath: rootPath) else { outcome.permissionSkipped += 1; return outcome }
         guard let en = fm.enumerator(atPath: rootPath) else { return outcome }
         var count = 0
