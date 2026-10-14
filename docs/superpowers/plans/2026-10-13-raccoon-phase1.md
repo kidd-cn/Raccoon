@@ -1651,7 +1651,9 @@ import Foundation
 import CleanKit
 
 public struct ScanEngine: Sendable {
-    public struct Dependencies: Sendable {
+    public struct Dependencies: @unchecked Sendable {
+        // @unchecked:本机 SDK 的 FileManager 未标注 Sendable(官方文档保证共享实例线程安全);
+        // 与 CleanKit/JSONHistoryStore 的 nonisolated(unsafe) 豁免同一先例。
         public let protection: ProtectionStore
         public let runningBundleIDs: @Sendable () async -> Set<String>
         public let snapshots: SnapshotCleanerServicing
@@ -1732,7 +1734,7 @@ public struct ScanEngine: Sendable {
         if let include = rule.include, !include.isEmpty {
             return try walkIncludeMode(rule: rule, include: include, running: running)   // Task 8 实现
         }
-        return try walkDefaultMode(rule: rule, running: running)
+        return try await walkDefaultMode(rule: rule, running: running)
     }
 
     func snapshotHits(rule: CleanupRule) async -> RuleOutcome {
@@ -1816,7 +1818,14 @@ public struct ScanEngine: Sendable {
     }
 
     /// 递归统计常规文件字节;不跟随目录符号链接。
+    /// 根本身为常规文件时返回其自身大小(enumerator(atPath:) 对普通文件产出空序列,
+    /// 一级子文件如 stray.log 须按自身字节计入聚合)。
     static func deepSize(path: String, fm: FileManager) -> Int64 {
+        if let attrs = try? fm.attributesOfItem(atPath: path),
+           let type = attrs[.type] as? FileAttributeType, type == .typeRegular,
+           let n = attrs[.size] as? NSNumber {
+            return n.int64Value
+        }
         guard let en = fm.enumerator(atPath: path) else { return 0 }
         var total: Int64 = 0
         while let rel = en.nextObject() as? String {
