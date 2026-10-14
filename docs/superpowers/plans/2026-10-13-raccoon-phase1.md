@@ -2769,6 +2769,14 @@ Expected: 窗口出现,侧边栏「清理」可选,其余四项灰显于"即将�
 git add -A && git commit -m "feat(Raccoon): 应用入口 + 侧边栏骨架 + 中英文本地化基线"
 ```
 
+> **Task 11 实现期环境修正(控制器追认,commit 26689b9;后续 UI 任务(12/15/17)必须沿用):**
+> 1. **SwiftUI 属性包装器手写展开**——本机仅 Command Line Tools(Swift 6.4 + macOS 27.0 SDK),缺 SwiftUI 宏插件 `libSwiftUIMacros.dylib`,`@State` 等属性包装器属性无法由宏展开,**带 `@State`/`@Binding`/`@Environment` 的 SwiftUI 原文代码在本机编译不过**。约定:按下划线存储属性 + 非变计算属性手写展开(见 `Sources/Raccoon/RaccoonApp.swift` 顶部注释范例);`$x` 绑定以 `_x.projectedValue` 传入。(`@Observable` 不受影响——Observation 宏随工具链发行,AppCore 已验证。)
+> 2. `Package.swift` 须加包级 `defaultLocalization: "en"`(含 .lproj 资源的 SwiftPM 硬性要求)。
+> 3. 本 SDK 无 `Scene.windowTitle(_:)`——窗口标题用内容级 `.navigationTitle`。
+> 4. `JSONHistoryStore` 定义在 **CleanKit**(CleanReport.swift),非 AppCore;使用处需 `import CleanKit`。
+> 5. L10n 键实为 57 个(任务文"58"系计数笔误),两语言键集已程序化验证 1:1。
+> 实现验证:swift build 零错误、`swift run` 启动存活、资源包 lproj 就位、test.sh 74/74 绿。
+
 ---
 
 ### Task 12: 清理主页(全状态 + 类别卡片)
