@@ -1,4 +1,5 @@
 import Testing
+import CleanKit
 @testable import ScanKit
 
 @Suite final class BundledRulesTests {
@@ -37,6 +38,24 @@ import Testing
         let lr = try RuleStore().loadBundled()
         for rule in lr.rules where rule.category == .cautious {
             #expect(rule.safety == .cautious, "\(rule.id) cautious 类别规则必须 safety=cautious")
+        }
+    }
+
+    // exclude ↔ 子规则一致性:凡无 include 的 trash 规则(默认模式按根的一级子项
+    // 整体作删除单元),若另一规则根位于其下,则相对首段组件必须出现在该祖先规则
+    // 的 exclude 中——否则两项同选时同一目录被计入两次,释放量虚高。
+    @Test func subRuleExcludedFromAncestorRule() throws {
+        let lr = try RuleStore().loadBundled()
+        let traversal = lr.rules.filter { $0.effectiveAction == .trash && ($0.include ?? []).isEmpty }
+        for a in traversal {
+            let aComps = ProtectionStore.normalize(a.path).split(separator: "/").map(String.init)
+            for b in traversal where b.id != a.id {
+                let bComps = ProtectionStore.normalize(b.path).split(separator: "/").map(String.init)
+                guard bComps.count > aComps.count, Array(bComps.prefix(aComps.count)) == aComps else { continue }
+                let firstRel = bComps[aComps.count]
+                #expect(a.exclude?.contains(firstRel) == true,
+                        "\(b.id) 位于 \(a.id) 之下但首段 \(firstRel) 不在其 exclude 中,将双重计数")
+            }
         }
     }
 }
