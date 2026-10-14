@@ -2154,7 +2154,8 @@ final class ScanViewModelTests: XCTestCase {
     func makeVM(service: ScanServicing, trash: TrashServicing) -> ScanViewModel {
         ScanViewModel(service: service,
                       exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "vm-\(UUID().uuidString)")!),
-                      history: JSONHistoryStore(directory: dir))
+                      history: JSONHistoryStore(directory: dir),
+                      trash: trash)
     }
 
     func hit(_ path: String, size: Int64, safety: SafetyLevel = .safe,
@@ -2274,7 +2275,7 @@ public struct AppScanService: ScanServicing {
         let store = RuleStore(protection: protection)
         let engine = ScanEngine(deps: .init(
             protection: protection,
-            runningBundleIDs: { await WorkspaceRunningAppDetector().runningBundleIDs() }
+            runningBundleIDs: { WorkspaceRunningAppDetector().runningBundleIDs() }
         ))
         let loaded = try store.loadBundled()
         return try await engine.scan(rules: loaded.rules, progress: progress)
@@ -2308,7 +2309,6 @@ public final class ScanViewModel {
     public private(set) var permissionSkippedCount = 0
     public private(set) var truncatedRuleIDs: Set<String> = []
     public private(set) var excludedCount = 0
-    public private(set) var warnings: [String] = []
     public private(set) var lastCleanup: CleanReport?
 
     public var selectedPaths: Set<String> = []
@@ -2318,15 +2318,20 @@ public final class ScanViewModel {
     public let service: ScanServicing
     public let exclusions: ExclusionsStore
     public let history: HistoryStoring
+    // 废纸篓服务可注入:生产用默认真实服务;测试注入 Mock,保证测试绝不触碰真实文件系统
+    // (否则硬编码真实服务会对不存在的 /a 真调 trashItem → .vanished → trashedCount 断言必红)
+    public let trash: TrashServicing
 
     // 供测试等待(内部可见)
     var task: Task<Void, Never>?
     var cleanTask: Task<Void, Never>?
 
-    public init(service: ScanServicing, exclusions: ExclusionsStore, history: HistoryStoring) {
+    public init(service: ScanServicing, exclusions: ExclusionsStore, history: HistoryStoring,
+                trash: TrashServicing = FileManagerTrashService()) {
         self.service = service
         self.exclusions = exclusions
         self.history = history
+        self.trash = trash
     }
 
     public func startScan() {
@@ -2383,7 +2388,7 @@ public final class ScanViewModel {
         phase = .cleaning
         confirmPresented = false
         let protection = ProtectionStore(userExclusions: exclusions.exclusions)
-        let executor = CleanExecutor(trash: FileManagerTrashService(), protection: protection)
+        let executor = CleanExecutor(trash: trash, protection: protection)
         cleanTask = Task { [weak self, history] in
             let report = await executor.clean(items)
             try? history.append(report)
