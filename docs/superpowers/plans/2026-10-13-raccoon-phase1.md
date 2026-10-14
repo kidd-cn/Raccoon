@@ -3323,8 +3323,8 @@ cp "Scripts/Info.plist" "$APP/Contents/Info.plist"
 # SwiftPM 资源 bundle(rules.json、本地化)需与可执行文件同目录
 find ".build/$CONFIG" -maxdepth 1 -name "*.bundle" -exec cp -R {} "$APP/Contents/MacOS/" \;
 
-# 占位图标(若已生成)
-[ -f "build/AppIcon.png" ] && cp "build/AppIcon.png" "$APP/Contents/Resources/AppIcon.png"
+# 占位图标(若已生成;|| true 防 set -e 下条件短路误退脚本)
+if [ -f "build/AppIcon.png" ]; then cp "build/AppIcon.png" "$APP/Contents/Resources/AppIcon.png"; fi
 
 codesign --force --sign - "$APP"
 echo "✅ $APP"
@@ -3360,6 +3360,7 @@ print("✅ \(out)")
 ```
 
 ```bash
+mkdir -p build   # make-icon.swift 直接写 build/AppIcon.png,目录须先存在
 swift Scripts/make-icon.swift build/AppIcon.png
 ```
 
