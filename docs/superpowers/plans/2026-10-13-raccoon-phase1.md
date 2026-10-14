@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6(strict concurrency)、SwiftUI、Foundation、AppKit(仅 NSWorkspace/NSOpenPanel)、swift-testing。零第三方依赖。
 
-> **测试框架环境适配(执行期确认):** 本机仅有 Command Line Tools(Swift 6.4),**没有 XCTest**。计划中出现的 XCTest 代码一律按此映射翻译执行:`import XCTest` → `import Testing`;`final class X: XCTestCase` → `@Suite final class X`(有 setUp/tearDown 时用 `init`/`deinit` 对应);`func testX()` → `@Test func X()`;`XCTAssertEqual(a,b)` → `#expect(a == b)`;`XCTAssertTrue/False` → `#expect(...)`/`#expect(!...)`;`XCTAssertNil/NotNil` → `#expect(x == nil)`/`#expect(x != nil)`;`try XCTUnwrap(x)` → `try #require(x)`;`XCTFail("m")` → `Issue.record("m")`;`try XCTSkipIf(c)` → `try #require(!c)`。Task 1 已验证此映射可用。
+> **测试框架环境适配(执行期确认):** 本机仅有 Command Line Tools(Swift 6.4),**没有 XCTest**。计划中出现的 XCTest 代码一律按此映射翻译执行:`import XCTest` → `import Testing`;`final class X: XCTestCase` → `@Suite final class X`(有 setUp/tearDown 时用 `init`/`deinit` 对应);`func testX()` → `@Test func X()`;`XCTAssertEqual(a,b)` → `#expect(a == b)`;`XCTAssertTrue/False` → `#expect(...)`/`#expect(!...)`;`XCTAssertNil/NotNil` → `#expect(x == nil)`/`#expect(x != nil)`;`try XCTUnwrap(x)` → `try #require(x)`;`XCTFail("m")` → `Issue.record("m")`;`try XCTSkipIf(c)` → `try #require(!c)`。Task 1 已验证此映射可用。另:`final class X: XCTestCase` 默认**串行**执行,而 swift-testing 的 `@Suite` 默认**并行**——凡共享文件系统状态(如 $HOME 内符号链接、套件 init 清扫)的套件必须加 `.serialized`(写作 `@Suite(.serialized) final class X`),避免跨测试竞态(Task 5 复审发现)。
 
 > **运行测试一律用 `Scripts/test.sh`**(内部为 `swift test -Xswiftc -load-plugin-library -Xswiftc <CLT 的 libTestingMacros.dylib>`,参数透传):本机 CLT 把 `libTestingMacros.dylib` 放在编译器不扫描的 `plugins/testing/` 子目录,裸 `swift test` 确定性报 `plugin for module 'TestingMacros' not found`(Task 1 代码质量审查发现并验证)。计划中所有 `swift test ...` 命令均按 `Scripts/test.sh ...` 执行。
 
