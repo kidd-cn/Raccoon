@@ -1250,6 +1250,24 @@ final class BundledRulesTests: XCTestCase {
             XCTAssertEqual(rule.safety, .cautious, "\(rule.id) cautious 类别规则必须 safety=cautious")
         }
     }
+
+    // exclude ↔ 子规则一致性:凡无 include 的 trash 规则(默认模式按根的一级子项
+    // 整体作删除单元),若另一规则根位于其下,则相对首段组件必须出现在该祖先规则
+    // 的 exclude 中——否则两项同选时同一目录被计入两次,释放量虚高。
+    func testBundledRules_subRuleExcludedFromAncestorRule() throws {
+        let lr = try RuleStore().loadBundled()
+        let traversal = lr.rules.filter { $0.effectiveAction == .trash && ($0.include ?? []).isEmpty }
+        for a in traversal {
+            let aComps = ProtectionStore.normalize(a.path).split(separator: "/").map(String.init)
+            for b in traversal where b.id != a.id {
+                let bComps = ProtectionStore.normalize(b.path).split(separator: "/").map(String.init)
+                guard bComps.count > aComps.count, Array(bComps.prefix(aComps.count)) == aComps else { continue }
+                let firstRel = bComps[aComps.count]
+                XCTAssertTrue(a.exclude?.contains(firstRel) == true,
+                              "\(b.id) 位于 \(a.id) 之下但首段 \(firstRel) 不在其 exclude 中,将双重计数")
+            }
+        }
+    }
 }
 ```
 
@@ -1271,8 +1289,8 @@ Expected: FAIL `fileNotFound`
      "exclude": ["Google", "Microsoft Edge", "BraveSoftware", "Firefox", "com.spotify.client", "com.tinyspeck.slackmacgap", "pip", "Homebrew", "org.swift.swiftpm", "CocoaPods"],
      "description": {"zh-Hans": "应用缓存总目录(浏览器与包管理缓存已单独归类),删除后由各应用自动重建", "en": "App cache root (browsers & package managers categorized separately); apps rebuild it automatically"}},
     {"id": "system.user-logs", "category": "system", "safety": "safe",
-     "path": "~/Library/Logs",
-     "description": {"zh-Hans": "应用日志文件", "en": "Application logs"}},
+     "path": "~/Library/Logs", "exclude": ["DiagnosticReports"],
+     "description": {"zh-Hans": "应用日志文件(崩溃报告单独归类)", "en": "Application logs (crash reports categorized separately)"}},
     {"id": "system.crash-reports", "category": "system", "safety": "safe",
      "path": "~/Library/Logs/DiagnosticReports",
      "description": {"zh-Hans": "应用崩溃报告(.ips),排查问题后才有用", "en": "Crash reports (.ips), only useful while debugging"}},
@@ -1287,7 +1305,7 @@ Expected: FAIL `fileNotFound`
      "description": {"zh-Hans": "iOS 设备调试符号,连真机时重新生成", "en": "iOS device symbols; regenerated when a device is connected"}},
     {"id": "dev.xcode-archives", "category": "dev", "safety": "cautious",
      "path": "~/Library/Developer/Xcode/Archives",
-     "description": {"zh-Hans": "历史 App 归档(ipa),上传 App Store 前有用,确认不再需要再删", "en": "Archived app builds (.ipa); useful before App Store uploads"}},
+     "description": {"zh-Hans": "历史 App 归档(ipa),上传 App Store 前有用,确认不再需要再删", "en": "Archived app builds (.ipa); useful before App Store uploads; review before deleting"}},
     {"id": "dev.simulator-devices", "category": "dev", "safety": "cautious",
      "path": "~/Library/Developer/CoreSimulator/Devices",
      "description": {"zh-Hans": "iOS 模拟器设备数据,删除后模拟器恢复出厂状态", "en": "Simulator device data; simulators reset to a clean state"}},
@@ -1344,7 +1362,7 @@ Expected: FAIL `fileNotFound`
      "description": {"zh-Hans": "iPhone/iPad 整机备份,删除后无法恢复旧备份", "en": "iPhone/iPad device backups; deleted backups cannot be restored"}},
     {"id": "cautious.macos-installers", "category": "cautious", "safety": "cautious",
      "path": "/Applications", "include": ["Install macOS *.app"],
-     "description": {"zh-Hans": "旧版 macOS 系统安装器(通常 12GB+)", "en": "Old macOS installers (usually 12GB+)"}},
+     "description": {"zh-Hans": "macOS 系统安装器(通常 12GB+)", "en": "macOS installers (usually 12GB+)"}},
     {"id": "cautious.tm-snapshots", "category": "cautious", "safety": "cautious",
      "path": "~/", "action": "tmutil-thin",
      "description": {"zh-Hans": "本地 Time Machine 快照,清理后 24 小时内的本地还原点将减少", "en": "Local Time Machine snapshots; local restore points within 24h are reduced"}}
@@ -1359,7 +1377,7 @@ rm Sources/ScanKit/Resources/.keep
 swift test --filter BundledRulesTests
 ```
 
-Expected: `Executed 4 tests, with 0 failures`
+Expected: `Executed 5 tests, with 0 failures`
 
 - [ ] **Step 5: Commit**
 
@@ -1710,21 +1728,23 @@ public struct ScanEngine: Sendable {
 
     func walk(rule: CleanupRule, running: Set<String>) async throws -> RuleOutcome {
         try Task.checkCancellation()
-        guard rule.effectiveAction == .trash else { return snapshotHits(rule: rule) }
+        guard rule.effectiveAction == .trash else { return await snapshotHits(rule: rule) }
         if let include = rule.include, !include.isEmpty {
             return try walkIncludeMode(rule: rule, include: include, running: running)   // Task 8 实现
         }
         return try walkDefaultMode(rule: rule, running: running)
     }
 
-    func snapshotHits(rule: CleanupRule) -> RuleOutcome {
-        let hits = deps.snapshots.listSnapshots().map { date in
+    func snapshotHits(rule: CleanupRule) async -> RuleOutcome {
+        // SnapshotCleanerServicing.listSnapshots 为 async(tmutil 子进程),
+        // 此处必须 await;walk 调用点相应为 `return await snapshotHits(rule: rule)`。
+        let hits = await deps.snapshots.listSnapshots()
+        return RuleOutcome(hits: hits.map { date in
             ScanHit(ruleID: rule.id, category: rule.category, safety: rule.safety,
                     path: "tmutil://\(date)", sizeBytes: 0, isDirectory: false,
                     bundleID: nil, appName: nil, isAppRunning: false,
                     action: .tmutilThin, snapshotDate: date)
-        }
-        return RuleOutcome(hits: hits)
+        })
     }
 
     // MARK: 默认模式:根的一级子项作为删除单元
