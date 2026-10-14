@@ -2477,6 +2477,11 @@ Expected: 全绿
 git add -A && git commit -m "feat(AppCore): ScanViewModel 状态机 + AppScanService 生产装配(含受保护路径注入回归测试)"
 ```
 
+> **Task 10 实现与质量记录(控制器,审查全通过后追认):**
+> - 实现 9e4802a:三处实现期修正(检测器闭包须 `await`(其 @MainActor,先前"去 await"的修正才错)/ `hit` 助手标签改位置参数 / 逐方法 `@Test`),73/73 绿,已追认于 9e30bfe。
+> - 质量轮 Fix-first 6 项 + 1 钉测试,裁决全修,7567ccb 一次落地(74/74 绿):cleanSelected 加 `guard phase == .completed` 防重入(Important);cleanTask 去 MainActor.run(闭包继承主 actor 隔离);history.append 失败改 os.Logger 不再静默;startScan/dismissReport 重置块补三计数;MockTrash.vanishedFor 预留注释;ProtectionStore 清理侧构造意图注释;新增 `cleanSelected_reentrancyGuarded`。
+> - 复审通过:7 项如实落地,安全钉测试(skipsProtectedAtExecutorLevel / testScanFlow)无回归。
+
 ---
 
 ### Task 11: App 骨架 · 入口 + 侧边栏 + L10n
