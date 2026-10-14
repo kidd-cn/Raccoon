@@ -1,6 +1,5 @@
 import Testing
 import Foundation
-import CleanKit
 @testable import AppCore
 
 @Suite final class ExclusionsStoreTests {
@@ -16,6 +15,8 @@ import CleanKit
     @MainActor
     @Test func testAddNormalizeDedupeAndPersist() {
         let store = ExclusionsStore(defaults: defaults)
+        store.add("")                                             // 空串守卫:不收录
+        #expect(store.exclusions.isEmpty)
         store.add("/tmp/foo/")
         #expect(store.exclusions == ["/tmp/foo"])           // 尾斜杠归一化
         store.add("/tmp/foo")                                     // 去重
