@@ -2517,10 +2517,13 @@ func byteText(_ bytes: Int64) -> String {
 "app.name" = "Raccoon 浣熊清理";
 "module.cleanup" = "清理";
 "module.uninstall" = "卸载";
-"module.aicleanup" = "AI 清理";
-"module.diskanalysis" = "磁盘分析";
+"module.aiCleanup" = "AI 清理";
+"module.diskAnalysis" = "磁盘分析";
 "module.monitor" = "监控";
 "sidebar.comingSoon" = "即将推出";
+```
+
+> **Key 命名修正(派发前,控制器):**侧边栏以 `loc("module.\(module.rawValue)")` 拼 key,`Module` 的 rawValue 为驼峰(`aiCleanup`/`diskAnalysis`),故这两个键必须驼峰;原文全小写系笔误(照抄查不到 key,侧边栏回退显示原始键名)。en 文件同步驼峰。
 "common.scan" = "开始扫描";
 "common.cancel" = "取消";
 "common.close" = "关闭";
@@ -2579,8 +2582,8 @@ func byteText(_ bytes: Int64) -> String {
 "app.name" = "Raccoon";
 "module.cleanup" = "Cleanup";
 "module.uninstall" = "Uninstall";
-"module.aicleanup" = "AI Cleanup";
-"module.diskanalysis" = "Disk Analysis";
+"module.aiCleanup" = "AI Cleanup";
+"module.diskAnalysis" = "Disk Analysis";
 "module.monitor" = "Monitor";
 "sidebar.comingSoon" = "Coming soon";
 "common.scan" = "Scan Now";
