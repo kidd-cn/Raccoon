@@ -3,7 +3,7 @@ import Testing
 import CleanKit
 @testable import ScanKit
 
-@Suite final class RuleStoreTests {
+@Suite(.serialized) final class RuleStoreTests {
     init() {
         // 跨 run 自愈:清扫历史 run 泄漏的 raccoon-test-alias-* 残留(环境性残留不算测试失败)
         let home = NSHomeDirectory()
