@@ -16,7 +16,7 @@ struct FakeScanService: ScanServicing {
 
 actor MockTrash: TrashServicing {
     let outcome: TrashOutcome
-    let vanishedFor: Set<String>   // 指定路径强制返回 .vanished(模拟文件已消失)
+    let vanishedFor: Set<String>   // 预留:指定路径强制返回 .vanished(报告态 vanishedCount 测试将用;当前 AppCore 用例未传)
     private(set) var calls: [String] = []
     init(outcome: TrashOutcome, vanishedFor: [String] = []) {
         self.outcome = outcome

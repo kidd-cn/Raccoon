@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import ScanKit
 import CleanKit
+import os
 
 @MainActor
 @Observable
@@ -48,6 +49,7 @@ public final class ScanViewModel {
         guard phase != .scanning && phase != .cleaning else { return }
         phase = .scanning
         hits = []; summaries = []; selectedPaths = []
+        permissionSkippedCount = 0; truncatedRuleIDs = []; excludedCount = 0
         progress = ScanProgress(rulesDone: 0, rulesTotal: 0, hitsFound: 0, bytesFound: 0)
         task = Task { [weak self] in await self?.runScan() }
     }
@@ -93,16 +95,23 @@ public final class ScanViewModel {
     }
 
     public func cleanSelected() {
+        guard phase == .completed else { return }   // 状态机不变量:仅 completed 态可发起清理,防 .cleaning/.report 重入
         let items = selectedItems.map(\.cleanItem)
         guard !items.isEmpty else { return }
         phase = .cleaning
         confirmPresented = false
+        // 清理时重建保护层(取此刻最新排除清单)——与扫描时的实例有意分离,两处语义须一致
         let protection = ProtectionStore(userExclusions: exclusions.exclusions)
         let executor = CleanExecutor(trash: trash, protection: protection)
         cleanTask = Task { [weak self, history] in
+            // Task 创建于 @MainActor 方法,闭包继承主 actor 隔离:此处的 phase/history 均在主线程触达
             let report = await executor.clean(items)
-            try? history.append(report)
-            await MainActor.run { [weak self] in self?.phase = .report(report) }
+            do { try history.append(report) }
+            catch {
+                Logger(subsystem: "com.raccooncleaner.Raccoon", category: "history")
+                    .error("history append failed: \(String(describing: error))")
+            }
+            self?.phase = .report(report)
         }
     }
 
@@ -113,6 +122,7 @@ public final class ScanViewModel {
     public func dismissReport() {
         phase = .idle
         hits = []; summaries = []; selectedPaths = []
+        permissionSkippedCount = 0; truncatedRuleIDs = []; excludedCount = 0
         progress = ScanProgress(rulesDone: 0, rulesTotal: 0, hitsFound: 0, bytesFound: 0)
     }
 }

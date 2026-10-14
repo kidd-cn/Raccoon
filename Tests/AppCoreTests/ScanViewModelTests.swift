@@ -105,6 +105,23 @@ final class ScanViewModelTests {
         guard case .report(let report) = vm.phase else { Issue.record(); return }
         #expect(report.skipped.first?.reason == "protected")
     }
+
+    // 质量 #1:清理不可重入(.report 态二次 cleanSelected 应被守卫挡下)
+    @Test func cleanSelected_reentrancyGuarded() async {
+        let trash = MockTrash(outcome: .trashed)
+        let vm = makeVM(service: FakeScanService(result: .init(
+            hits: [hit("/a", 100)], summaries: [], permissionSkippedCount: 0,
+            truncatedRuleIDs: [], excludedCount: 0)), trash: trash)
+        vm.startScan()
+        await vm.task?.value
+        vm.cleanSelected()
+        await vm.cleanTask?.value
+        vm.cleanSelected()                 // .report 态重入:守卫应挡下
+        await vm.cleanTask?.value
+        let calls = await trash.calls
+        #expect(calls == ["/a"])           // 仅一次清理
+        guard case .report = vm.phase else { Issue.record("应仍在 report"); return }
+    }
 }
 
 struct FailingScanService: ScanServicing {
