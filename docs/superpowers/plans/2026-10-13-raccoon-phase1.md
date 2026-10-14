@@ -2852,6 +2852,21 @@ struct CategoryCardView: View {
 }
 ```
 
+(`DetailListView` 在 Task 13 实现,本 Task 先留占位文件 `Sources/Raccoon/DetailListView.swift`,内容为最小可编译实现,Task 13 替换:
+
+```swift
+import SwiftUI
+import ScanKit
+import AppCore
+
+struct DetailListView: View {
+    let vm: ScanViewModel
+    let category: RuleCategory
+    var body: some View { Text(loc("detail.title")) }
+}
+```
+)
+
 - [ ] **Step 2: 构建并人工目测**
 
 Run: `swift run &`
@@ -2868,7 +2883,7 @@ git add -A && git commit -m "feat(Raccoon): 清理主页四状态 + 类别卡片
 ### Task 13: 明细列表页
 
 **Files:**
-- Create: `Sources/Raccoon/DetailListView.swift`
+- Modify: `Sources/Raccoon/DetailListView.swift`(替换 Task 12 占位)
 
 - [ ] **Step 1: 实现**
 
