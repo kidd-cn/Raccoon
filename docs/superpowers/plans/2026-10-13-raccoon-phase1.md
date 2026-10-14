@@ -1168,10 +1168,14 @@ final class BundledRulesTests: XCTestCase {
         }
     }
 
-    func testBundledRules_allCautiousDefaultUnchecked() throws {
+    func testBundledRules_cautiousCategoryImpliesCautiousSafety() throws {
         let lr = try RuleStore().loadBundled()
-        for rule in lr.rules where rule.safety == .cautious {
-            XCTAssertEqual(rule.category, .cautious, "\(rule.id) cautious 规则应归入 cautious 类别卡片")
+        // §5.1 约束:category=cautious 要求 safety=cautious(与 RuleStore.validate 同向)。
+        // 反向不成立——dev/apps 类别也允许 safety=cautious(规格 §5.3:Xcode Archives、
+        // CoreSimulator、~/.cache 归 dev,微信缓存归 apps);默认不勾选由 safety 驱动,
+        // 与类别卡片归属无关,故不断言 safety→category。
+        for rule in lr.rules where rule.category == .cautious {
+            XCTAssertEqual(rule.safety, .cautious, "\(rule.id) cautious 类别规则必须 safety=cautious")
         }
     }
 }
