@@ -932,6 +932,44 @@ final class RuleStoreTests: XCTestCase {
         XCTAssertEqual(lr.warnings.count, 1)              // 尾斜杠归一化后视为同路径
     }
 
+    // I1 回归:符号链接别名指进硬保护根 → 整条拒绝
+    func testLoad_symlinkAliasToProtectedRejected() throws {
+        let dir = NSTemporaryDirectory() + "raccoon-rs-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let alias = dir + "/alias"
+        try FileManager.default.createSymbolicLink(atPath: alias, withDestinationPath: NSHomeDirectory() + "/Library/Preferences")
+        defer {
+            try? FileManager.default.removeItem(atPath: alias)
+            try? FileManager.default.removeItem(atPath: dir)
+        }
+        let lr = try load("""
+        {"version":1,"rules":[
+          {"id":"sneaky","category":"system","safety":"safe","path":"\(alias)"}
+        ]}
+        """)
+        XCTAssertTrue(lr.rules.isEmpty)
+        XCTAssertEqual(lr.rejected.count, 1)
+    }
+
+    // I1 回归:家目录内别名解析后逃出主目录 → 解析形态作用域校验拒绝
+    func testLoad_symlinkEscapingHomeRejected() throws {
+        let dir = NSTemporaryDirectory() + "raccoon-rs-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let alias = dir + "/escape"
+        try FileManager.default.createSymbolicLink(atPath: alias, withDestinationPath: "/usr")
+        defer {
+            try? FileManager.default.removeItem(atPath: alias)
+            try? FileManager.default.removeItem(atPath: dir)
+        }
+        let lr = try load("""
+        {"version":1,"rules":[
+          {"id":"escape","category":"system","safety":"safe","path":"\(alias)"}
+        ]}
+        """)
+        XCTAssertTrue(lr.rules.isEmpty)
+        XCTAssertEqual(lr.rejected.count, 1)
+    }
+
     func testEffectiveAction_defaultsToTrash() throws {
         let lr = try load("""
         {"version":1,"rules":[{"id":"a","category":"system","safety":"safe","path":"~/Library/Logs"}]}
@@ -1061,10 +1099,14 @@ public struct RuleStore: Sendable {
             return rule.safety == .cautious ? nil : "tmutil-thin 仅允许 cautious 规则"
         }
         let std = ProtectionStore.normalize(rule.path)
-        guard ProtectionStore.isAllowedRuleRoot(std, include: rule.include) else {
+        // I1(Task 2 审查):符号链接别名按解析前后双形态校验——别名指进硬保护根、或解析后逃出主目录,都整条拒绝
+        let resolved = ProtectionStore.normalize((std as NSString).resolvingSymlinksInPath)
+        guard ProtectionStore.isAllowedRuleRoot(std, include: rule.include),
+              ProtectionStore.isAllowedRuleRoot(resolved, include: rule.include) else {
             return "规则根超出允许作用域: \(rule.path)"
         }
-        if ProtectionStore.rulePathConflictsWithProtection(std, hardRoots: protection.hardRoots) {
+        if ProtectionStore.rulePathConflictsWithProtection(std, hardRoots: protection.hardRoots)
+            || ProtectionStore.rulePathConflictsWithProtection(resolved, hardRoots: protection.hardRoots) {
             return "规则根与硬保护冲突: \(rule.path)"
         }
         return nil
