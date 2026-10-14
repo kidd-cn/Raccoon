@@ -1971,6 +1971,7 @@ git add -A && git commit -m "feat(ScanKit): ScanEngine 默认模式(一级子项
 
 Run: `Scripts/test.sh --filter ScanEngineTests`
 Expected: 新增 7 个用例失败(include 模式返回空、快照/权限未接)
+> **实际记录:**红 4 例(include×3 + 悬空链接×1);unreadableChild/cancellation/snapshot 3 例测的是 Task 7 已接好的路径,改造前即绿(回归守卫)——本行预期为任务文本算术错误,红→绿纪律对 4 个真正新增行为成立。cancellation 测试的 Task 闭包需先提升 Sendable 局部值再捕获(RegionIsolation),已授权。
 
 - [ ] **Step 3: 实现 walkIncludeMode**
 
@@ -2028,16 +2029,25 @@ Expected: 新增 7 个用例失败(include 模式返回空、快照/权限未接
     }
 ```
 
+> **质量审查后已删除(31facf1):**上段代码中的 `fileSize` 助手与本节正文里的 `dirAndNotSymlink`/`fileSize` 取值路径已被整体替换——`attributesOfItem` 是 stat 语义(跟随符号链接),活链接命中 glob 会把目标大小计入释放量(虚高至 GB 级)。质量修复后 walkIncludeMode 统一用 `en.fileAttributes`(lstat 语义):typeSymbolicLink → 0 字节(分支位于 isReadableFile 之前,与默认模式义务 1 对称)、typeRegular → 条目自身 size、typeDirectory → deepSize、其余特殊条目 → 0。本节保留原文仅作历史记录,**以 31facf1 为准**。
+
 - [ ] **Step 4: 运行确认通过(全量)**
 
 Run: `Scripts/test.sh`
-Expected: 全绿(ScanEngineTests 17 例)
+Expected: 全绿(ScanEngineTests 17 例;质量修复轮后为 **19 例**、全量 67 例,见下)
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat(ScanKit): include 全树匹配(目录命中即整目录)+ 权限跳过 + 取消 + 快照规则"
 ```
+
+**质量修复轮记录(commit 31facf1,两阶段审查通过):**
+1. 【Important】include 活链接 sizeBytes 报目标大小 → `en.fileAttributes` lstat 语义 + 符号链接 0 字节(见上方删除注)
+2. 【Important】`rule.exclude` 无法剪目录子树(include `*.log` + exclude `node_modules` 场景)→ 未命中 glob 的目录剪枝条件加 `|| matchesAny(name, rule.exclude)`
+3. 【Important】include 模式根不可读静默空返回 → 枚举前镜像默认模式 guard(义务字面仅限默认模式,按对称性裁决为修)
+4. 【Minor】进度(去重前)与 ScanResult.hits(去重后)口径差 → 累加处注释标注
+5. 【Minor】根不可读分支无测试 → 新增 `rootUnreadableCountedSkipped_bothModes`(两模式对称断言)+ `includeMode_danglingSymlinkIsZeroByteHit`(include 悬空链接钉)
 
 ---
 
