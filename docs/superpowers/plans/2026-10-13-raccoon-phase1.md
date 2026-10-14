@@ -1831,6 +1831,15 @@ public struct ScanEngine: Sendable {
 }
 ```
 
+注意:`walk` 里引用的 `walkIncludeMode` 属于 Task 8,本 Task 编译需要占位——在 ScanEngine.swift 里加最小实现(带 `// Task 8 实现` 注释;Task 8 以完整实现替换):
+
+```swift
+    func walkIncludeMode(rule: CleanupRule, include: [String], running: Set<String>) throws -> RuleOutcome {
+        // Task 8 实现:include 全盘匹配模式
+        RuleOutcome()
+    }
+```
+
 - [ ] **Step 5: 运行确认通过**
 
 Run: `swift test --filter ScanEngineTests`
