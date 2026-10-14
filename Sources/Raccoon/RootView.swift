@@ -15,7 +15,7 @@ enum Module: String, CaseIterable, Identifiable {
         }
     }
     static var availableCases: [Module] { [.cleanup] }
-    static var comingSoonCases: [Module] { [.uninstall, .aiCleanup, .diskAnalysis, .monitor] }
+    static var comingSoonCases: [Module] { allCases.filter { !availableCases.contains($0) } }
 }
 
 struct RootView: View {

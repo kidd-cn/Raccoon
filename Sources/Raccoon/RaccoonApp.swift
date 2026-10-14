@@ -21,6 +21,7 @@ struct RaccoonApp: App {
             RootView(exclusions: exclusions)
                 .frame(minWidth: 860, minHeight: 560)
                 // 27.0 SDK 无 Scene.windowTitle;用内容级 navigationTitle 承担窗口标题。
+                // 窗口标题兜底;RootView 侧栏 List 上的同调用服务列头,两处勿删其一
                 .navigationTitle(loc("app.name"))
         }
         Settings {
