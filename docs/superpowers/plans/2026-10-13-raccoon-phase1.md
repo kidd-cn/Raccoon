@@ -226,6 +226,7 @@ final class ProtectionStoreTests: XCTestCase {
         XCTAssertTrue(ProtectionStore.rulePathConflictsWithProtection("\(home)/Documents", hardRoots: roots))          // 等于
         XCTAssertTrue(ProtectionStore.rulePathConflictsWithProtection("\(home)/Documents/projects", hardRoots: roots)) // 位于其下
         XCTAssertTrue(ProtectionStore.rulePathConflictsWithProtection("\(home)/Library", hardRoots: roots))            // 是保护根的祖先
+        XCTAssertFalse(ProtectionStore.rulePathConflictsWithProtection("\(home)/Library", hardRoots: roots, include: [".DS_Store"])) // 祖先+include 白名单放行(§5.3 system.ds-store 依赖;命中级过滤兜底)
         XCTAssertFalse(ProtectionStore.rulePathConflictsWithProtection("\(home)/Library/Caches", hardRoots: roots))
     }
 
@@ -306,12 +307,20 @@ public struct ProtectionStore: Sendable {
             && comps[1].hasPrefix("Install macOS ") && comps[1].hasSuffix(".app")
     }
 
-    /// 规则根不得等于、位于、或包含(作为祖先)任何硬保护根。
-    public static func rulePathConflictsWithProtection(_ path: String, hardRoots: [String]) -> Bool {
-        let std = normalize(path)
+    /// 规则根不得等于、位于硬保护根之内;不得为硬保护根的祖先——除非带 include 白名单。
+    /// (修订:Task 6 预检发现规格 §5.2"不得包含"与 §5.3 system.ds-store(根为主目录,
+    /// 是一切硬保护根的祖先)矛盾;按计划头部裁决规则以规格 §5.3 为准——祖先方向仅在
+    /// include 非空时豁免,硬保护内容仍由扫描命中级过滤 + 删除前 isDenied 兜底,规则级
+    /// 校验是防呆 lint,不是安全边界。等于/位于其下方向无条件冲突,include 也救不了。)
+    public static func rulePathConflictsWithProtection(_ path: String, hardRoots: [String], include: [String]? = nil) -> Bool {
+        let comps = foldedComponents(of: path)
+        let ancestorAllowed = !(include ?? []).isEmpty
         return hardRoots.contains { root in
-            let rc = normalize(root)
-            return std == rc || std.hasPrefix(rc + "/") || rc.hasPrefix(std + "/")
+            let rc = foldedComponents(of: root)
+            if comps.isEmpty || rc.isEmpty { return true }
+            if Array(comps.prefix(rc.count)) == rc { return true }                // 等于/位于其下:一律冲突
+            if Array(rc.prefix(comps.count)) == comps { return !ancestorAllowed } // 祖先:无 include 才冲突
+            return false
         }
     }
 }
@@ -836,6 +845,19 @@ import CleanKit
 @testable import ScanKit
 
 final class RuleStoreTests: XCTestCase {
+    // 修订(Task 5 规格+质量审查):suite 开始时清扫历史残留的 raccoon-test-alias-*,
+    // 跨 run 自愈、不积累(进程内 removeItem 偶发失败,根因未查明;按质量审查定级 Minor,
+    // 采用自愈方案而非 Issue.record,避免环境性红测)
+    override func setUp() {
+        super.setUp()
+        let home = NSHomeDirectory()
+        if let stale = try? FileManager.default.contentsOfDirectory(atPath: home) {
+            for f in stale where f.hasPrefix("raccoon-test-alias-") {
+                try? FileManager.default.removeItem(atPath: home + "/" + f)
+            }
+        }
+    }
+
     func load(_ json: String) throws -> LoadedRules {
         let store = RuleStore(protection: ProtectionStore())
         return try store.load(data: Data(json.utf8))
@@ -889,13 +911,25 @@ final class RuleStoreTests: XCTestCase {
     }
 
     func testLoad_tmutilThinRequiresCautious() throws {
+        // 修订(Task 5 质量审查 #1):断言原因字符串锁定走的是 tmutil-thin 分支——
+        // 反事实验证:若该分支被删,规则误入 trash 路径,会以"超出允许作用域"拒绝,
+        // 规则数相同但原因不同,无原因断言则测试不具判别力
         let lr = try load("""
         {"version":1,"rules":[
           {"id":"snap","category":"system","safety":"safe","path":"~","action":"tmutil-thin"}
         ]}
         """)
         XCTAssertTrue(lr.rules.isEmpty)
-        // tmutil-thin 的 path 不做作用域/保护校验(不参与文件遍历)
+        XCTAssertEqual(lr.rejected.count, 1)
+        XCTAssertTrue(lr.rejected[0].contains("tmutil-thin 仅允许"), "\(lr.rejected)")
+        // 正例:tmutil-thin 跳过 path 作用域/保护校验(不参与文件遍历),cautious 即可加载
+        let ok = try load("""
+        {"version":1,"rules":[
+          {"id":"snap-ok","category":"apps","safety":"cautious","path":"/usr","action":"tmutil-thin"}
+        ]}
+        """)
+        XCTAssertEqual(ok.rules.count, 1)
+        XCTAssertTrue(ok.rejected.isEmpty, "\(ok.rejected)")
     }
 
     func testLoad_securityRegression_ruleAtProtectedPathRejected() throws {
@@ -930,6 +964,41 @@ final class RuleStoreTests: XCTestCase {
         """)
         XCTAssertEqual(lr.rules.count, 2)                 // 允许,仅告警
         XCTAssertEqual(lr.warnings.count, 1)              // 尾斜杠归一化后视为同路径
+    }
+
+    // 修订(Task 6 预检):重叠告警只比较 trash 规则;快照规则 path:"~" 不与 ds-store 误报
+    func testLoad_overlapIgnoresTmutilThinRules() throws {
+        let lr = try load("""
+        {"version":1,"rules":[
+          {"id":"a","category":"system","safety":"safe","path":"~","include":[".DS_Store"]},
+          {"id":"b","category":"cautious","safety":"cautious","path":"~/","action":"tmutil-thin"}
+        ]}
+        """)
+        XCTAssertEqual(lr.rules.count, 2)
+        XCTAssertTrue(lr.warnings.isEmpty, "\(lr.warnings)")
+    }
+
+    // 修订(Task 6 预检,§5.3):主目录(硬保护根的祖先)+ include 白名单 → 可加载
+    func testLoad_ancestorRootWithIncludeLoads() throws {
+        let lr = try load("""
+        {"version":1,"rules":[
+          {"id":"ds","category":"system","safety":"safe","path":"~","include":[".DS_Store"]}
+        ]}
+        """)
+        XCTAssertEqual(lr.rules.count, 1)
+        XCTAssertTrue(lr.rejected.isEmpty, "\(lr.rejected)")
+    }
+
+    // 祖先根无 include(整目录扫荡,如 ~/Library)仍拒绝
+    func testLoad_libraryRootWithoutIncludeRejected() throws {
+        let lr = try load("""
+        {"version":1,"rules":[
+          {"id":"sweep","category":"system","safety":"safe","path":"~/Library"}
+        ]}
+        """)
+        XCTAssertTrue(lr.rules.isEmpty)
+        XCTAssertEqual(lr.rejected.count, 1)
+        XCTAssertTrue(lr.rejected[0].contains("硬保护冲突"))
     }
 
     // I1 回归:主目录内符号链接别名指进硬保护根 → 解析形态冲突校验整条拒绝
@@ -1071,11 +1140,14 @@ public struct RuleStore: Sendable {
             valid.append(rule)
         }
 
+        // 修订(Task 6 预检):重叠告警只比较文件遍历(trash)规则——tmutil-thin 不产生
+        // 文件条目,无"重复展示"问题;且快照规则的天然写法就是 path:"~",不该与 ds-store 误报
+        let comparable = valid.filter { $0.effectiveAction == .trash }
         var warnings: [String] = []
-        for i in valid.indices {
-            for j in valid.indices where j > i {
-                if ProtectionStore.normalize(valid[i].path) == ProtectionStore.normalize(valid[j].path) {
-                    warnings.append("规则根重叠: \(valid[i].id) / \(valid[j].id)")
+        for i in comparable.indices {
+            for j in comparable.indices where j > i {
+                if ProtectionStore.normalize(comparable[i].path) == ProtectionStore.normalize(comparable[j].path) {
+                    warnings.append("规则根重叠: \(comparable[i].id) / \(comparable[j].id)")
                 }
             }
         }
@@ -1097,8 +1169,8 @@ public struct RuleStore: Sendable {
               ProtectionStore.isAllowedRuleRoot(resolved, include: rule.include) else {
             return "规则根超出允许作用域: \(rule.path)"
         }
-        if ProtectionStore.rulePathConflictsWithProtection(std, hardRoots: protection.hardRoots)
-            || ProtectionStore.rulePathConflictsWithProtection(resolved, hardRoots: protection.hardRoots) {
+        if ProtectionStore.rulePathConflictsWithProtection(std, hardRoots: protection.hardRoots, include: rule.include)
+            || ProtectionStore.rulePathConflictsWithProtection(resolved, hardRoots: protection.hardRoots, include: rule.include) {
             return "规则根与硬保护冲突: \(rule.path)"
         }
         return nil
@@ -1116,7 +1188,7 @@ public struct RuleStore: Sendable {
 - [ ] **Step 5: 运行确认通过**
 
 Run: `swift test --filter RuleStoreTests`
-Expected: `Executed 10 tests, with 0 failures`
+Expected: `Executed 15 tests, with 0 failures`
 
 - [ ] **Step 6: Commit**
 
