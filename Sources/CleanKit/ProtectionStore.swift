@@ -84,15 +84,19 @@ public struct ProtectionStore: Sendable {
             && comps[1].lowercased().hasPrefix("install macos ") && comps[1].lowercased().hasSuffix(".app")
     }
 
-    /// 规则根不得等于、位于、或包含(作为祖先)任何硬保护根(大小写不敏感)。
-    /// 空组件数组(根 `/`)是一切路径的祖先 → 视为冲突。
-    public static func rulePathConflictsWithProtection(_ path: String, hardRoots: [String]) -> Bool {
+    /// 规则根不得等于、位于硬保护根之内;不得为硬保护根的祖先——除非带 include 白名单。
+    /// (祖先方向豁免:规格 §5.3 system.ds-store 以主目录为根的匹配型规则必须能加载;
+    /// 硬保护内容仍由扫描命中级过滤 + 删除前 isDenied 兜底,规则级校验是防呆 lint,
+    /// 不是安全边界。等于/位于其下方向无条件冲突,include 也救不了。)
+    public static func rulePathConflictsWithProtection(_ path: String, hardRoots: [String], include: [String]? = nil) -> Bool {
         let comps = foldedComponents(of: path)
+        let ancestorAllowed = !(include ?? []).isEmpty
         return hardRoots.contains { root in
             let rc = foldedComponents(of: root)
-            return comps.isEmpty || rc.isEmpty
-                || Array(comps.prefix(rc.count)) == rc
-                || Array(rc.prefix(comps.count)) == comps
+            if comps.isEmpty || rc.isEmpty { return true }
+            if Array(comps.prefix(rc.count)) == rc { return true }                // 等于/位于其下:一律冲突
+            if Array(rc.prefix(comps.count)) == comps { return !ancestorAllowed } // 祖先:无 include 才冲突
+            return false
         }
     }
 }

@@ -38,11 +38,14 @@ public struct RuleStore: Sendable {
             valid.append(rule)
         }
 
+        // 重叠告警只比较文件遍历(trash)规则——tmutil-thin 不产生文件条目,无"重复展示"问题;
+        // 且快照规则的天然写法就是 path:"~",不该与 ds-store 误报
+        let comparable = valid.filter { $0.effectiveAction == .trash }
         var warnings: [String] = []
-        for i in valid.indices {
-            for j in valid.indices where j > i {
-                if ProtectionStore.normalize(valid[i].path) == ProtectionStore.normalize(valid[j].path) {
-                    warnings.append("规则根重叠: \(valid[i].id) / \(valid[j].id)")
+        for i in comparable.indices {
+            for j in comparable.indices where j > i {
+                if ProtectionStore.normalize(comparable[i].path) == ProtectionStore.normalize(comparable[j].path) {
+                    warnings.append("规则根重叠: \(comparable[i].id) / \(comparable[j].id)")
                 }
             }
         }
@@ -64,8 +67,8 @@ public struct RuleStore: Sendable {
               ProtectionStore.isAllowedRuleRoot(resolved, include: rule.include) else {
             return "规则根超出允许作用域: \(rule.path)"
         }
-        if ProtectionStore.rulePathConflictsWithProtection(std, hardRoots: protection.hardRoots)
-            || ProtectionStore.rulePathConflictsWithProtection(resolved, hardRoots: protection.hardRoots) {
+        if ProtectionStore.rulePathConflictsWithProtection(std, hardRoots: protection.hardRoots, include: rule.include)
+            || ProtectionStore.rulePathConflictsWithProtection(resolved, hardRoots: protection.hardRoots, include: rule.include) {
             return "规则根与硬保护冲突: \(rule.path)"
         }
         return nil

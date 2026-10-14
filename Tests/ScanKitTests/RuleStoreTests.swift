@@ -4,6 +4,16 @@ import CleanKit
 @testable import ScanKit
 
 @Suite final class RuleStoreTests {
+    init() {
+        // 跨 run 自愈:清扫历史 run 泄漏的 raccoon-test-alias-* 残留(环境性残留不算测试失败)
+        let home = NSHomeDirectory()
+        if let stale = try? FileManager.default.contentsOfDirectory(atPath: home) {
+            for f in stale where f.hasPrefix("raccoon-test-alias-") {
+                try? FileManager.default.removeItem(atPath: home + "/" + f)
+            }
+        }
+    }
+
     func load(_ json: String) throws -> LoadedRules {
         let store = RuleStore(protection: ProtectionStore())
         return try store.load(data: Data(json.utf8))
@@ -75,7 +85,16 @@ import CleanKit
         ]}
         """)
         #expect(lr.rules.isEmpty)
+        #expect(lr.rejected.count == 1)
+        #expect(lr.rejected[0].contains("tmutil-thin 仅允许"))
         // tmutil-thin 的 path 不做作用域/保护校验(不参与文件遍历)
+        let ok = try load("""
+        {"version":1,"rules":[
+          {"id":"snap-ok","category":"apps","safety":"cautious","path":"/usr","action":"tmutil-thin"}
+        ]}
+        """)
+        #expect(ok.rules.count == 1)
+        #expect(ok.rejected.isEmpty)
     }
 
     @Test func testLoad_securityRegression_ruleAtProtectedPathRejected() throws {
@@ -110,6 +129,41 @@ import CleanKit
         """)
         #expect(lr.rules.count == 2)                 // 允许,仅告警
         #expect(lr.warnings.count == 1)              // 尾斜杠归一化后视为同路径
+    }
+
+    // 重叠告警只比较 trash 规则:tmutil-thin 不产生文件条目,无"重复展示"问题
+    @Test func testLoad_overlapIgnoresTmutilThinRules() throws {
+        let lr = try load("""
+        {"version":1,"rules":[
+          {"id":"a","category":"system","safety":"safe","path":"~","include":[".DS_Store"]},
+          {"id":"b","category":"cautious","safety":"cautious","path":"~/","action":"tmutil-thin"}
+        ]}
+        """)
+        #expect(lr.rules.count == 2)
+        #expect(lr.warnings.isEmpty)
+    }
+
+    // §5.3:祖先方向仅在 include 非空时豁免(system.ds-store 以主目录为根的匹配型规则必须能加载)
+    @Test func testLoad_ancestorRootWithIncludeLoads() throws {
+        let lr = try load("""
+        {"version":1,"rules":[
+          {"id":"ds","category":"system","safety":"safe","path":"~","include":[".DS_Store"]}
+        ]}
+        """)
+        #expect(lr.rules.count == 1)
+        #expect(lr.rejected.isEmpty)
+    }
+
+    // 祖先方向无 include:~/Library 是 ~/Library/Preferences 等硬保护根的祖先 → 冲突拒绝
+    @Test func testLoad_libraryRootWithoutIncludeRejected() throws {
+        let lr = try load("""
+        {"version":1,"rules":[
+          {"id":"sweep","category":"system","safety":"safe","path":"~/Library"}
+        ]}
+        """)
+        #expect(lr.rules.isEmpty)
+        #expect(lr.rejected.count == 1)
+        #expect(lr.rejected[0].contains("硬保护冲突"))
     }
 
     // I1 回归:符号链接别名指进硬保护根 → 整条拒绝。

@@ -56,6 +56,7 @@ struct ProtectionStoreTests {
         #expect(ProtectionStore.rulePathConflictsWithProtection("\(home)/Documents", hardRoots: roots))          // 等于
         #expect(ProtectionStore.rulePathConflictsWithProtection("\(home)/Documents/projects", hardRoots: roots)) // 位于其下
         #expect(ProtectionStore.rulePathConflictsWithProtection("\(home)/Library", hardRoots: roots))            // 是保护根的祖先
+        #expect(!ProtectionStore.rulePathConflictsWithProtection("\(home)/Library", hardRoots: roots, include: [".DS_Store"])) // 祖先+include 白名单放行(§5.3 system.ds-store 依赖)
         #expect(!ProtectionStore.rulePathConflictsWithProtection("\(home)/Library/Caches", hardRoots: roots))
     }
 
