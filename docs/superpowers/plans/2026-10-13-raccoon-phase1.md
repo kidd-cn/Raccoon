@@ -242,7 +242,7 @@ final class ProtectionStoreTests: XCTestCase {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `swift test --filter ProtectionStoreTests`
+Run: `Scripts/test.sh --filter ProtectionStoreTests`
 Expected: 编译错误 `cannot find 'ProtectionStore' in scope`
 
 - [ ] **Step 3: 实现**
@@ -328,7 +328,7 @@ public struct ProtectionStore: Sendable {
 
 - [ ] **Step 4: 运行确认通过**
 
-Run: `swift test --filter ProtectionStoreTests`
+Run: `Scripts/test.sh --filter ProtectionStoreTests`
 Expected: `Executed 7 tests, with 0 failures`
 
 - [ ] **Step 5: Commit**
@@ -461,7 +461,7 @@ final class CleanExecutorTests: XCTestCase {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `swift test --filter 'TrashServiceTests|CleanExecutorTests'`
+Run: `Scripts/test.sh --filter 'TrashServiceTests|CleanExecutorTests'`
 Expected: 编译错误(类型未定义)
 
 - [ ] **Step 3: 实现**
@@ -671,7 +671,7 @@ public struct JSONHistoryStore: HistoryStoring {
 
 - [ ] **Step 5: 运行确认通过**
 
-Run: `swift test --filter 'TrashServiceTests|CleanExecutorTests'`
+Run: `Scripts/test.sh --filter 'TrashServiceTests|CleanExecutorTests'`
 Expected: `Executed 6 tests, with 0 failures`(注意:`testFileManagerTrashService_trashesTempFile` 会向你的废纸篓放入一个临时文件,属预期)
 
 - [ ] **Step 6: Commit**
@@ -752,7 +752,7 @@ final class SystemIntegrationTests: XCTestCase {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `swift test --filter 'SnapshotCleanerTests|SystemIntegrationTests'`
+Run: `Scripts/test.sh --filter 'SnapshotCleanerTests|SystemIntegrationTests'`
 Expected: 编译错误(`appName(for:)` 未定义)
 
 - [ ] **Step 3: 实现**
@@ -815,12 +815,12 @@ public struct AppIdentityResolver: Sendable {
 
 - [ ] **Step 4: 运行确认通过**
 
-Run: `swift test --filter 'SnapshotCleanerTests|SystemIntegrationTests'`
+Run: `Scripts/test.sh --filter 'SnapshotCleanerTests|SystemIntegrationTests'`
 Expected: `Executed 6 tests, with 0 failures`
 
 - [ ] **Step 5: 全量测试 + Commit**
 
-Run: `swift test`
+Run: `Scripts/test.sh`
 Expected: 全绿
 
 ```bash
@@ -1042,7 +1042,7 @@ final class RuleStoreTests: XCTestCase {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `swift test --filter RuleStoreTests`
+Run: `Scripts/test.sh --filter RuleStoreTests`
 Expected: 编译错误(类型未定义)
 
 - [ ] **Step 3: 实现 RuleModels**
@@ -1187,7 +1187,7 @@ public struct RuleStore: Sendable {
 
 - [ ] **Step 5: 运行确认通过**
 
-Run: `swift test --filter RuleStoreTests`
+Run: `Scripts/test.sh --filter RuleStoreTests`
 Expected: `Executed 15 tests, with 0 failures`
 
 - [ ] **Step 6: Commit**
@@ -1273,7 +1273,7 @@ final class BundledRulesTests: XCTestCase {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `swift test --filter BundledRulesTests`
+Run: `Scripts/test.sh --filter BundledRulesTests`
 Expected: FAIL `fileNotFound`
 
 - [ ] **Step 3: 写 rules.json**
@@ -1572,7 +1572,7 @@ actor MockSnapshots: SnapshotCleanerServicing {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `swift test --filter ScanEngineTests`
+Run: `Scripts/test.sh --filter ScanEngineTests`
 Expected: 编译错误(类型未定义)
 
 - [ ] **Step 3: 实现 ScanModels**
@@ -1842,7 +1842,7 @@ public struct ScanEngine: Sendable {
 
 - [ ] **Step 5: 运行确认通过**
 
-Run: `swift test --filter ScanEngineTests`
+Run: `Scripts/test.sh --filter ScanEngineTests`
 Expected: `Executed 10 tests, with 0 failures`
 
 - [ ] **Step 6: Commit**
@@ -1933,7 +1933,7 @@ git add -A && git commit -m "feat(ScanKit): ScanEngine 默认模式(一级子项
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `swift test --filter ScanEngineTests`
+Run: `Scripts/test.sh --filter ScanEngineTests`
 Expected: 新增 6 个用例失败(include 模式返回空、快照/权限未接)
 
 - [ ] **Step 3: 实现 walkIncludeMode**
@@ -1994,7 +1994,7 @@ Expected: 新增 6 个用例失败(include 模式返回空、快照/权限未接
 
 - [ ] **Step 4: 运行确认通过(全量)**
 
-Run: `swift test`
+Run: `Scripts/test.sh`
 Expected: 全绿(ScanEngineTests 16 例)
 
 - [ ] **Step 5: Commit**
@@ -2054,7 +2054,7 @@ final class ExclusionsStoreTests: XCTestCase {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `swift test --filter ExclusionsStoreTests`
+Run: `Scripts/test.sh --filter ExclusionsStoreTests`
 Expected: 编译错误(类型未定义)
 
 - [ ] **Step 3: 实现**
@@ -2095,7 +2095,7 @@ public final class ExclusionsStore {
 
 - [ ] **Step 4: 运行确认通过 + Commit**
 
-Run: `swift test --filter ExclusionsStoreTests`
+Run: `Scripts/test.sh --filter ExclusionsStoreTests`
 Expected: `Executed 2 tests, with 0 failures`
 
 ```bash
@@ -2262,7 +2262,7 @@ struct FailingScanService: ScanServicing {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `swift test --filter ScanViewModelTests`
+Run: `Scripts/test.sh --filter ScanViewModelTests`
 Expected: 编译错误(类型未定义)
 
 - [ ] **Step 3: 实现 AppScanService**
@@ -2419,7 +2419,7 @@ public final class ScanViewModel {
 
 - [ ] **Step 5: 运行确认通过(全量)+ Commit**
 
-Run: `swift test`
+Run: `Scripts/test.sh`
 Expected: 全绿
 
 ```bash
@@ -3392,7 +3392,7 @@ git add -A && git commit -m "chore: .app 组装脚本 + Info.plist + 占位图�
 
 - [ ] **Step 3: 全量测试**
 
-Run: `swift test`
+Run: `Scripts/test.sh`
 Expected: 全绿(约 45+ 用例)
 
 - [ ] **Step 4: 手动 QA 清单(逐项核对,在本机真实执行)**
