@@ -2876,6 +2876,21 @@ struct DetailListView: View {
 ```
 )
 
+(`ReportView` 在 Task 14 实现,本 Task 同理留占位文件 `Sources/Raccoon/ReportView.swift`,Task 14 替换:
+
+```swift
+import SwiftUI
+import CleanKit
+import AppCore
+
+struct ReportView: View {
+    let report: CleanReport
+    let vm: ScanViewModel
+    var body: some View { Text(loc("report.done")) }
+}
+```
+)
+
 - [ ] **Step 2: 构建并人工目测**
 
 Run: `swift run &`
@@ -3010,10 +3025,23 @@ struct AppIconView: View {
 }
 ```
 
+(`ConfirmCleanView` 在 Task 14 实现,本 Task 先留占位文件 `Sources/Raccoon/ConfirmCleanView.swift`,内容为最小可编译实现,Task 14 替换:
+
+```swift
+import SwiftUI
+import AppCore
+
+struct ConfirmCleanView: View {
+    let vm: ScanViewModel
+    var body: some View { Text(loc("confirm.title")) }
+}
+```
+)
+
 - [ ] **Step 2: 构建并人工目测**
 
 Run: `swift run &`
-Expected: 扫描完成后点类别卡片 → 明细列表按大小降序、显示应用图标、路径中段截断、运行中应用黄色标签、cautious 橙色标签;底部已选联动;工具栏三个选择按钮生效。`kill %1`。
+Expected: 扫描完成后点类别卡片 → 明细列表按大小降序、显示应用图标、路径中段截断、运行中应用黄色标签、cautious 橙色标签;底部已选联动;工具栏三个选择按钮生效。`kill %1`。`kill %1`。
 
 - [ ] **Step 3: Commit**
 
@@ -3026,7 +3054,7 @@ git add -A && git commit -m "feat(Raccoon): 明细列表页(勾选/标签/图标
 ### Task 14: 确认弹窗 + 完成报告
 
 **Files:**
-- Create: `Sources/Raccoon/ConfirmCleanView.swift`、`Sources/Raccoon/ReportView.swift`
+- Modify: `Sources/Raccoon/ConfirmCleanView.swift`(替换 Task 13 占位)、`Sources/Raccoon/ReportView.swift`(替换 Task 12 占位)
 
 - [ ] **Step 1: 实现确认弹窗**
 
