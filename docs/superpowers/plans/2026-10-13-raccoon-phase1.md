@@ -1866,6 +1866,22 @@ git add -A && git commit -m "feat(ScanKit): ScanEngine 默认模式(一级子项
 - Modify: `Sources/ScanKit/ScanEngine.swift`(补 `walkIncludeMode`、`fileSize`)
 - Test: `Tests/ScanKitTests/ScanEngineTests.swift`(追加)
 
+**Task 7 质量审查义务(实现本 Task 时一并落实,逐项执行):**
+1. **符号链接语义统一(walkDefaultMode)**:`isSymlink` 判定提前到 `isReadableFile`/`fileExists` 两个 guard **之前**(仍在 isDenied/exclude 之后);命中即按 0 字节、`isDirectory: false` 收录为 hit,不论目标是否存活——悬空链接可安全进废纸篓,是清理目标,不得计入 permissionSkipped。
+2. **deepSize 不跟随符号链接**:主循环改用枚举器自带属性 `en.fileAttributes`(描述条目本身,符号链接为 typeSymlink 不计入),与顶层 0 字节策略一致;根为常规文件的早返回分支保留;注释同步修正。
+3. **根不可读显式计数**:`contentsOfDirectory` 之前 `guard fm.isReadableFile(atPath: rootPath) else { outcome.permissionSkipped += 1; return outcome }`。
+4. **截断对齐类型化**:`truncated` 改为 `zip(rules, outcomes)` + guard let,消除 compactMap 压缩导致的隐含对齐不变量:
+   ```swift
+   let truncated = Set(zip(rules, outcomes).compactMap { rule, outcome -> String? in
+       guard let outcome, outcome.truncated else { return nil }
+       return rule.id
+   })
+   ```
+5. **匹配大小写不敏感**:`matchesAny` 的 `fnmatch` 加 `FNM_CASEFOLD`(与保护层"宁可多拦不可漏放"策略对齐;排除更多=展示更少,方向保守)。
+6. **聚合按 path 去重**:scan() 收尾(appName 解析后、分类聚合前)`var seen = Set<String>(); let deduped = hits.filter { seen.insert($0.path).inserted }`,以 deduped 继续聚合与返回(include 模式落地后跨规则同路径是现实风险)。
+7. **进度累计化**:消费循环维护 `totalHits`/`totalBytes` 运行总量,progress 用累计值,不再每事件重算全 outcomes。
+8. (仅记录,不改)deepSize 同步阻塞协作线程——规模化后再桥接全局队列。
+
 - [ ] **Step 1: 追加失败测试**
 
 在 `Tests/ScanKitTests/ScanEngineTests.swift` 末尾追加:
@@ -1938,12 +1954,23 @@ git add -A && git commit -m "feat(ScanKit): ScanEngine 默认模式(一级子项
         XCTAssertEqual(first.cleanItem.action, .tmutilThin(date: "2026-10-13-120000"))
         XCTAssertEqual(first.category, .cautious)
     }
+
+    // Task 7 质量 Minor 1:悬空符号链接是清理目标,应 0 字节收录,不落 permissionSkipped
+    func testDefaultMode_danglingSymlinkIsZeroByteHit() async throws {
+        try FileManager.default.createSymbolicLink(atPath: root + "/Caches/dangling",
+                                                   withDestinationPath: root + "/Caches/nowhere")
+        let result = try await engine().scan(rules: [ScanFixtures.rule(id: "c", path: root + "/Caches")])
+        let dangling = try XCTUnwrap(result.hits.first { $0.path.hasSuffix("/dangling") })
+        XCTAssertEqual(dangling.sizeBytes, 0)
+        XCTAssertFalse(dangling.isDirectory)
+        XCTAssertEqual(result.permissionSkippedCount, 0)
+    }
 ```
 
 - [ ] **Step 2: 运行确认失败**
 
 Run: `Scripts/test.sh --filter ScanEngineTests`
-Expected: 新增 6 个用例失败(include 模式返回空、快照/权限未接)
+Expected: 新增 7 个用例失败(include 模式返回空、快照/权限未接)
 
 - [ ] **Step 3: 实现 walkIncludeMode**
 
@@ -2004,7 +2031,7 @@ Expected: 新增 6 个用例失败(include 模式返回空、快照/权限未接
 - [ ] **Step 4: 运行确认通过(全量)**
 
 Run: `Scripts/test.sh`
-Expected: 全绿(ScanEngineTests 16 例)
+Expected: 全绿(ScanEngineTests 17 例)
 
 - [ ] **Step 5: Commit**
 
