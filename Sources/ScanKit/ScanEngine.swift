@@ -43,6 +43,8 @@ public struct ScanEngine: Sendable {
         let running = await deps.runningBundleIDs()
         let total = max(rules.count, 1)
         var done = 0
+        var totalHits = 0
+        var totalBytes: Int64 = 0
         var outcomes = [RuleOutcome?](repeating: nil, count: rules.count)
 
         try await withThrowingTaskGroup(of: (Int, RuleOutcome).self) { group in
@@ -54,25 +56,34 @@ public struct ScanEngine: Sendable {
             for try await (idx, outcome) in group {
                 outcomes[idx] = outcome
                 done += 1
-                let hits = outcomes.compactMap(\.self).flatMap(\.hits)
+                // 进度累计化:运行总量累加,不再每事件对全 outcomes 重算
+                if let o = outcomes[idx] {
+                    totalHits += o.hits.count
+                    totalBytes += o.hits.reduce(Int64(0)) { $0 + $1.sizeBytes }
+                }
                 progress(ScanProgress(rulesDone: done, rulesTotal: total,
-                                      hitsFound: hits.count,
-                                      bytesFound: hits.reduce(Int64(0)) { $0 + $1.sizeBytes }))
+                                      hitsFound: totalHits, bytesFound: totalBytes))
             }
         }
 
         // 应用名解析依赖 NSWorkspace(@MainActor):扫描收尾时在主线程批量补齐一次
         let rawHits = outcomes.compactMap(\.self).flatMap(\.hits)
         let hits = await MainActor.run { Self.resolveAppNames(rawHits, resolver: identity) }
-        let byCat = Dictionary(grouping: hits, by: \.category)
+        // 聚合按 path 去重:规则根嵌套时同一 item 可能被多条规则命中
+        var seen = Set<String>()
+        let deduped = hits.filter { seen.insert($0.path).inserted }
+        let byCat = Dictionary(grouping: deduped, by: \.category)
         let summaries = RuleCategory.allCases.compactMap { cat -> CategorySummary? in
             guard let list = byCat[cat] else { return nil }
             return CategorySummary(category: cat,
                                    totalBytes: list.reduce(Int64(0)) { $0 + $1.sizeBytes },
                                    hitCount: list.count)
         }
-        let truncated = Set(zip(rules, outcomes.compactMap(\.self)).filter { $0.1.truncated }.map(\.0.id))
-        return ScanResult(hits: hits,
+        let truncated = Set(zip(rules, outcomes).compactMap { rule, outcome -> String? in
+            guard let outcome, outcome.truncated else { return nil }
+            return rule.id
+        })
+        return ScanResult(hits: deduped,
                           summaries: summaries,
                           permissionSkippedCount: outcomes.compactMap(\.self).reduce(0) { $0 + $1.permissionSkipped },
                           truncatedRuleIDs: truncated,
@@ -108,6 +119,7 @@ public struct ScanEngine: Sendable {
         let fm = deps.fileManager
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: rootPath, isDirectory: &isDir), isDir.boolValue else { return outcome }
+        guard fm.isReadableFile(atPath: rootPath) else { outcome.permissionSkipped += 1; return outcome }
 
         let children = ((try? fm.contentsOfDirectory(atPath: rootPath)) ?? []).sorted()
         var count = 0
@@ -120,14 +132,22 @@ public struct ScanEngine: Sendable {
             if deps.protection.isDenied(full) || Self.matchesAny(name, rule.exclude) {
                 outcome.excluded += 1; continue
             }
+            // 符号链接:不论目标是否存活,按 0 字节、非目录收录(链接本身可安全进废纸篓)
+            if Self.isSymlink(full) {
+                let bid = AppIdentityResolver.bundleIDComponent(in: full)
+                outcome.hits.append(ScanHit(ruleID: rule.id, category: rule.category, safety: rule.safety,
+                                            path: full, sizeBytes: 0, isDirectory: false,
+                                            bundleID: bid, appName: nil,
+                                            isAppRunning: bid.map { running.contains($0) } ?? false,
+                                            action: .trash, snapshotDate: nil))
+                continue
+            }
             guard fm.isReadableFile(atPath: full) else { outcome.permissionSkipped += 1; continue }
             var childIsDir: ObjCBool = false
             guard fm.fileExists(atPath: full, isDirectory: &childIsDir) else {
                 outcome.permissionSkipped += 1; continue
             }
-            // 符号链接:不深入目标,按 0 字节计(删除链接本身无害)
-            let symlink = Self.isSymlink(full)
-            let size = symlink ? 0 : Self.deepSize(path: full, fm: fm)
+            let size = Self.deepSize(path: full, fm: fm)
             let bid = AppIdentityResolver.bundleIDComponent(in: full)
             outcome.hits.append(ScanHit(ruleID: rule.id, category: rule.category, safety: rule.safety,
                                         path: full, sizeBytes: size, isDirectory: childIsDir.boolValue,
@@ -161,14 +181,14 @@ public struct ScanEngine: Sendable {
 
     static func matchesAny(_ name: String, _ patterns: [String]?) -> Bool {
         guard let patterns, !patterns.isEmpty else { return false }
-        return patterns.contains { fnmatch($0, name, 0) == 0 }
+        return patterns.contains { fnmatch($0, name, FNM_CASEFOLD) == 0 }
     }
 
     static func isSymlink(_ path: String) -> Bool {
         (try? URL(fileURLWithPath: path).resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) ?? false
     }
 
-    /// 递归统计常规文件字节;不跟随目录符号链接。
+    /// 递归统计常规文件字节;符号链接一律不计(枚举器属性描述条目本身,不跟随链接)。
     /// 根本身为常规文件时返回其自身大小(enumerator(atPath:) 对普通文件产出空序列,
     /// 测试规格要求 stray.log 这类一级子文件按自身字节计入聚合)。
     static func deepSize(path: String, fm: FileManager) -> Int64 {
@@ -179,18 +199,62 @@ public struct ScanEngine: Sendable {
         }
         guard let en = fm.enumerator(atPath: path) else { return 0 }
         var total: Int64 = 0
-        while let rel = en.nextObject() as? String {
-            let attrs = try? fm.attributesOfItem(atPath: path + "/" + rel)
-            if let type = attrs?[.type] as? FileAttributeType, type == .typeRegular,
-               let n = attrs?[.size] as? NSNumber {
-                total += n.int64Value
-            }
+        while en.nextObject() != nil {
+            guard let attrs = en.fileAttributes,
+                  let type = attrs[.type] as? FileAttributeType, type == .typeRegular,
+                  let n = attrs[.size] as? NSNumber else { continue }
+            total += n.int64Value
         }
         return total
     }
 
+    // MARK: include 模式:全树匹配文件名 glob;命中目录整体为删除单元
+
     func walkIncludeMode(rule: CleanupRule, include: [String], running: Set<String>) throws -> RuleOutcome {
-        // Task 8 实现:include 全盘匹配模式
-        RuleOutcome()
+        var outcome = RuleOutcome()
+        let rootPath = ProtectionStore.normalize(rule.path)
+        let fm = deps.fileManager
+        guard let en = fm.enumerator(atPath: rootPath) else { return outcome }
+        var count = 0
+        while let rel = en.nextObject() as? String {
+            try Task.checkCancellation()
+            count += 1
+            if count > deps.itemLimitPerRule { outcome.truncated = true; break }
+
+            let full = rootPath + "/" + rel
+            let name = (rel as NSString).lastPathComponent
+            let symlink = Self.isSymlink(full)
+            var isDir: ObjCBool = false
+            _ = fm.fileExists(atPath: full, isDirectory: &isDir)
+            let dirAndNotSymlink = isDir.boolValue && !symlink
+
+            if Self.matchesAny(name, include) {
+                if deps.protection.isDenied(full) || Self.matchesAny(name, rule.exclude) {
+                    outcome.excluded += 1
+                    if dirAndNotSymlink { en.skipDescendants() }
+                    continue
+                }
+                guard fm.isReadableFile(atPath: full) else { outcome.permissionSkipped += 1; continue }
+                let size = dirAndNotSymlink ? Self.deepSize(path: full, fm: fm) : Self.fileSize(path: full, fm: fm)
+                let bid = AppIdentityResolver.bundleIDComponent(in: full)
+                outcome.hits.append(ScanHit(ruleID: rule.id, category: rule.category, safety: rule.safety,
+                                            path: full, sizeBytes: size, isDirectory: dirAndNotSymlink,
+                                            bundleID: bid, appName: nil,
+                                            isAppRunning: bid.map { running.contains($0) } ?? false,
+                                            action: .trash, snapshotDate: nil))
+                if dirAndNotSymlink { en.skipDescendants() }   // 整目录删除,内部不再列举
+                continue
+            }
+            // 未命中 glob 的目录:受保护则剪枝
+            if dirAndNotSymlink && deps.protection.isDenied(full) {
+                en.skipDescendants()
+                outcome.excluded += 1
+            }
+        }
+        return outcome
+    }
+
+    static func fileSize(path: String, fm: FileManager) -> Int64 {
+        (try? fm.attributesOfItem(atPath: path))?[.size] as? Int64 ?? 0
     }
 }

@@ -104,4 +104,87 @@ import CleanKit
         #expect(system.totalBytes == 360)
         #expect(system.hitCount == 3)
     }
+
+    // MARK: include 模式(文件名 glob 白名单)
+
+    @Test func includeMode_dsStoreAcrossTree() async throws {
+        let result = try await engine().scan(
+            rules: [ScanFixtures.rule(id: "ds", path: root, include: [".DS_Store"])])
+        #expect(result.hits.count == 2)
+        #expect(result.hits.reduce(0) { $0 + $1.sizeBytes } == 10)
+        #expect(result.hits.allSatisfy { !$0.isDirectory })
+    }
+
+    @Test func includeMode_protectionSkipsSubtree() async throws {
+        let protection = ProtectionStore(userExclusions: [root + "/nested/deep"])
+        let result = try await engine(protection: protection).scan(
+            rules: [ScanFixtures.rule(id: "ds", path: root, include: [".DS_Store"])])
+        #expect(result.hits.count == 1)          // 仅 nested/.DS_Store
+        #expect(result.excludedCount == 1)
+    }
+
+    @Test func includeMode_directoryHitsGlob_installedInstallerStyle() async throws {
+        // 模拟 /Applications 安装器规则:目录命中 glob → 整目录为一个删除单元
+        let fm = FileManager.default
+        try fm.createDirectory(atPath: root + "/Install macOS Test.app/Contents", withIntermediateDirectories: true)
+        try Data(repeating: 0x41, count: 15).write(to: URL(fileURLWithPath: root + "/Install macOS Test.app/Contents/PkgInfo"))
+        let result = try await engine().scan(
+            rules: [ScanFixtures.rule(id: "inst", path: root, include: ["Install macOS *.app"])])
+        #expect(result.hits.count == 1)
+        let hit = try #require(result.hits.first)
+        #expect(hit.isDirectory)
+        #expect(hit.sizeBytes == 15)
+    }
+
+    // MARK: 权限与取消
+
+    @Test func defaultMode_unreadableChildCountedSkipped() async throws {
+        try #require(geteuid() != 0, "root 下权限测试无意义")
+        let fm = FileManager.default
+        try fm.createDirectory(atPath: root + "/Caches/locked", withIntermediateDirectories: true)
+        try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: root + "/Caches/locked")
+        defer { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root + "/Caches/locked") }
+        let result = try await engine().scan(rules: [ScanFixtures.rule(id: "c", path: root + "/Caches")])
+        #expect(!result.hits.contains { $0.path.hasSuffix("/locked") })
+        #expect(result.permissionSkippedCount == 1)
+    }
+
+    @Test func cancellation_throws() async {
+        // Task 的 @Sendable 闭包不能捕获非 Sendable 的套件实例(self):
+        // 先把 Sendable 的 engine 与路径提升为局部值再进闭包(语义不变)。
+        let eng = engine()
+        let caches = root + "/Caches"
+        let task = Task { try await eng.scan(rules: [ScanFixtures.rule(id: "c", path: caches)]) }
+        task.cancel()
+        do { _ = try await task.value; Issue.record("应抛 CancellationError") }
+        catch is CancellationError {}
+        catch { Issue.record("意外错误:\(error)") }
+    }
+
+    // MARK: 快照规则
+
+    @Test func snapshotRule_producesHitsFromLister() async throws {
+        let rule = CleanupRule(id: "snap", category: .cautious, safety: .cautious, path: "~",
+                               include: nil, exclude: nil, action: .tmutilThin, description: nil)
+        let e = ScanEngine(deps: .init(protection: ProtectionStore(), runningBundleIDs: { [] },
+                                       snapshots: MockSnapshots(listed: ["2026-10-13-120000", "2026-10-12-090000"])))
+        let result = try await e.scan(rules: [rule])
+        #expect(result.hits.count == 2)
+        let first = try #require(result.hits.first)
+        #expect(first.path == "tmutil://2026-10-13-120000")
+        #expect(first.action == .tmutilThin)
+        #expect(first.cleanItem.action == .tmutilThin(date: "2026-10-13-120000"))
+        #expect(first.category == .cautious)
+    }
+
+    // Task 7 质量 Minor 1:悬空符号链接是清理目标,应 0 字节收录,不落 permissionSkipped
+    @Test func defaultMode_danglingSymlinkIsZeroByteHit() async throws {
+        try FileManager.default.createSymbolicLink(atPath: root + "/Caches/dangling",
+                                                   withDestinationPath: root + "/Caches/nowhere")
+        let result = try await engine().scan(rules: [ScanFixtures.rule(id: "c", path: root + "/Caches")])
+        let dangling = try #require(result.hits.first { $0.path.hasSuffix("/dangling") })
+        #expect(dangling.sizeBytes == 0)
+        #expect(!dangling.isDirectory)
+        #expect(result.permissionSkippedCount == 0)
+    }
 }
