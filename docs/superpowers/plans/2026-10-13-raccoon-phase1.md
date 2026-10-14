@@ -2776,6 +2776,7 @@ git add -A && git commit -m "feat(Raccoon): 应用入口 + 侧边栏骨架 + 中
 > 4. `JSONHistoryStore` 定义在 **CleanKit**(CleanReport.swift),非 AppCore;使用处需 `import CleanKit`。
 > 5. L10n 键实为 57 个(任务文"58"系计数笔误),两语言键集已程序化验证 1:1。
 > 实现验证:swift build 零错误、`swift run` 启动存活、资源包 lproj 就位、test.sh 74/74 绿。
+> **质量轮 Approved,4 Minor 全修(e5b4dd1):**中文文案全角标点统一(7 行,Task 12 消费前修讫)、`comingSoonCases` 改 `allCases.filter` 派生(单点维护互斥穷尽不变式)、byteText 加消费方注释、双 navigationTitle 加分工注释。审查明示无需复审。
 
 ---
 
