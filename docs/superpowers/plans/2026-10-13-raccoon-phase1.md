@@ -2330,13 +2330,18 @@ public struct AppScanService: ScanServicing {
         let store = RuleStore(protection: protection)
         let engine = ScanEngine(deps: .init(
             protection: protection,
-            runningBundleIDs: { WorkspaceRunningAppDetector().runningBundleIDs() }
+            runningBundleIDs: { await WorkspaceRunningAppDetector().runningBundleIDs() }
         ))
         let loaded = try store.loadBundled()
         return try await engine.scan(rules: loaded.rules, progress: progress)
     }
 }
 ```
+
+> **实现期修正(9e4802a,三处,均已追认):**
+> 1. 上文 `runningBundleIDs` 闭包**必须带 `await`**:WorkspaceRunningAppDetector 是 `@MainActor`(NSWorkspace 要求),其方法虽同步声明,跨 actor 调用为隐式异步。本节原文无 await 编译失败——先前"去掉 await"的计划修复才是错的。
+> 2. 测试 `hit` 助手声明为 `func hit(_ path: String, _ size: Int64, ...)`:原文 `size:` 标签与全部位置传参调用点矛盾,属任务文本笔误。
+> 3. 测试方法须逐个加 `@Test`:本机 swift-testing 工具链无 @Test 发现 0 例。仓库既有套件均逐方法标注。
 
 - [ ] **Step 4: 实现 ScanViewModel**
 
