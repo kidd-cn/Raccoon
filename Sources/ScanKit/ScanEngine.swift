@@ -56,7 +56,7 @@ public struct ScanEngine: Sendable {
             for try await (idx, outcome) in group {
                 outcomes[idx] = outcome
                 done += 1
-                // 进度累计化:运行总量累加,不再每事件对全 outcomes 重算
+                // 进度按规则命中累计(去重前);ScanResult.hits 按 path 去重,规则根嵌套时进度终值可大于结果条数
                 if let o = outcomes[idx] {
                     totalHits += o.hits.count
                     totalBytes += o.hits.reduce(Int64(0)) { $0 + $1.sizeBytes }
@@ -214,6 +214,8 @@ public struct ScanEngine: Sendable {
         var outcome = RuleOutcome()
         let rootPath = ProtectionStore.normalize(rule.path)
         let fm = deps.fileManager
+        // 与默认模式对称:根存在但不可读 → 显式计数,不与"干净"混淆
+        guard fm.isReadableFile(atPath: rootPath) else { outcome.permissionSkipped += 1; return outcome }
         guard let en = fm.enumerator(atPath: rootPath) else { return outcome }
         var count = 0
         while let rel = en.nextObject() as? String {
@@ -223,38 +225,48 @@ public struct ScanEngine: Sendable {
 
             let full = rootPath + "/" + rel
             let name = (rel as NSString).lastPathComponent
-            let symlink = Self.isSymlink(full)
-            var isDir: ObjCBool = false
-            _ = fm.fileExists(atPath: full, isDirectory: &isDir)
-            let dirAndNotSymlink = isDir.boolValue && !symlink
+            // 条目自身属性(lstat 语义):不跟随符号链接,零额外系统调用
+            let type = en.fileAttributes?[.type] as? FileAttributeType
+            let isDir = type == .typeDirectory
 
             if Self.matchesAny(name, include) {
                 if deps.protection.isDenied(full) || Self.matchesAny(name, rule.exclude) {
                     outcome.excluded += 1
-                    if dirAndNotSymlink { en.skipDescendants() }
+                    if isDir { en.skipDescendants() }
+                    continue
+                }
+                // 符号链接:不论目标是否存活,按 0 字节、非目录收录(与默认模式一致)
+                if type == .typeSymbolicLink {
+                    let bid = AppIdentityResolver.bundleIDComponent(in: full)
+                    outcome.hits.append(ScanHit(ruleID: rule.id, category: rule.category, safety: rule.safety,
+                                                path: full, sizeBytes: 0, isDirectory: false,
+                                                bundleID: bid, appName: nil,
+                                                isAppRunning: bid.map { running.contains($0) } ?? false,
+                                                action: .trash, snapshotDate: nil))
                     continue
                 }
                 guard fm.isReadableFile(atPath: full) else { outcome.permissionSkipped += 1; continue }
-                let size = dirAndNotSymlink ? Self.deepSize(path: full, fm: fm) : Self.fileSize(path: full, fm: fm)
+                let size: Int64
+                switch type {
+                case .typeDirectory: size = Self.deepSize(path: full, fm: fm)
+                case .typeRegular: size = (en.fileAttributes?[.size] as? NSNumber)?.int64Value ?? 0
+                default: size = 0   // socket/fifo 等特殊条目:0 字节收录,不深入
+                }
                 let bid = AppIdentityResolver.bundleIDComponent(in: full)
                 outcome.hits.append(ScanHit(ruleID: rule.id, category: rule.category, safety: rule.safety,
-                                            path: full, sizeBytes: size, isDirectory: dirAndNotSymlink,
+                                            path: full, sizeBytes: size, isDirectory: isDir,
                                             bundleID: bid, appName: nil,
                                             isAppRunning: bid.map { running.contains($0) } ?? false,
                                             action: .trash, snapshotDate: nil))
-                if dirAndNotSymlink { en.skipDescendants() }   // 整目录删除,内部不再列举
+                if isDir { en.skipDescendants() }   // 整目录删除,内部不再列举
                 continue
             }
-            // 未命中 glob 的目录:受保护则剪枝
-            if dirAndNotSymlink && deps.protection.isDenied(full) {
+            // 未命中 glob 的目录:受保护或被 exclude 命名 → 剪枝(否则 exclude 名下的子树照常深入)
+            if isDir && (deps.protection.isDenied(full) || Self.matchesAny(name, rule.exclude)) {
                 en.skipDescendants()
                 outcome.excluded += 1
             }
         }
         return outcome
-    }
-
-    static func fileSize(path: String, fm: FileManager) -> Int64 {
-        (try? fm.attributesOfItem(atPath: path))?[.size] as? Int64 ?? 0
     }
 }

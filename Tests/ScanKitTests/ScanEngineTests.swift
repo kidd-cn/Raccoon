@@ -187,4 +187,33 @@ import CleanKit
         #expect(!dangling.isDirectory)
         #expect(result.permissionSkippedCount == 0)
     }
+
+    // 质量 #5:规则根本身不可读 → 显式计数(默认与 include 两模式对称)
+    @Test func rootUnreadableCountedSkipped_bothModes() async throws {
+        try #require(geteuid() != 0, "root 下权限测试无意义")
+        let fm = FileManager.default
+        let lockedRoot = root + "/LockedRoot"
+        try fm.createDirectory(atPath: lockedRoot, withIntermediateDirectories: true)
+        try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: lockedRoot)
+        defer { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: lockedRoot) }
+        let def = try await engine().scan(rules: [ScanFixtures.rule(id: "d", path: lockedRoot)])
+        #expect(def.permissionSkippedCount == 1)
+        #expect(def.hits.isEmpty)
+        let inc = try await engine().scan(
+            rules: [ScanFixtures.rule(id: "i", path: lockedRoot, include: ["*.log"])])
+        #expect(inc.permissionSkippedCount == 1)
+        #expect(inc.hits.isEmpty)
+    }
+
+    // 质量 #1:include 模式悬空符号链接 → 0 字节命中,不落 permissionSkipped
+    @Test func includeMode_danglingSymlinkIsZeroByteHit() async throws {
+        try FileManager.default.createSymbolicLink(atPath: root + "/nested/.DS_Store.link",
+                                                   withDestinationPath: root + "/nested/nowhere")
+        let result = try await engine().scan(
+            rules: [ScanFixtures.rule(id: "ds", path: root, include: [".DS_Store*"])])
+        let link = try #require(result.hits.first { $0.path.hasSuffix(".DS_Store.link") })
+        #expect(link.sizeBytes == 0)
+        #expect(!link.isDirectory)
+        #expect(result.permissionSkippedCount == 0)
+    }
 }
