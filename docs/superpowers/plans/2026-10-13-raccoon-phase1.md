@@ -932,16 +932,11 @@ final class RuleStoreTests: XCTestCase {
         XCTAssertEqual(lr.warnings.count, 1)              // 尾斜杠归一化后视为同路径
     }
 
-    // I1 回归:符号链接别名指进硬保护根 → 整条拒绝
+    // I1 回归:主目录内符号链接别名指进硬保护根 → 解析形态冲突校验整条拒绝
     func testLoad_symlinkAliasToProtectedRejected() throws {
-        let dir = NSTemporaryDirectory() + "raccoon-rs-\(UUID().uuidString)"
-        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        let alias = dir + "/alias"
+        let alias = NSHomeDirectory() + "/raccoon-test-alias-\(UUID().uuidString)"
         try FileManager.default.createSymbolicLink(atPath: alias, withDestinationPath: NSHomeDirectory() + "/Library/Preferences")
-        defer {
-            try? FileManager.default.removeItem(atPath: alias)
-            try? FileManager.default.removeItem(atPath: dir)
-        }
+        defer { try? FileManager.default.removeItem(atPath: alias) }
         let lr = try load("""
         {"version":1,"rules":[
           {"id":"sneaky","category":"system","safety":"safe","path":"\(alias)"}
@@ -949,18 +944,14 @@ final class RuleStoreTests: XCTestCase {
         """)
         XCTAssertTrue(lr.rules.isEmpty)
         XCTAssertEqual(lr.rejected.count, 1)
+        XCTAssertTrue(lr.rejected[0].contains("硬保护冲突"))   // 锁定:解析形态的冲突校验拦截
     }
 
-    // I1 回归:家目录内别名解析后逃出主目录 → 解析形态作用域校验拒绝
+    // I1 回归:主目录内别名解析后逃出主目录 → 解析形态作用域校验拒绝
     func testLoad_symlinkEscapingHomeRejected() throws {
-        let dir = NSTemporaryDirectory() + "raccoon-rs-\(UUID().uuidString)"
-        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        let alias = dir + "/escape"
+        let alias = NSHomeDirectory() + "/raccoon-test-alias-\(UUID().uuidString)"
         try FileManager.default.createSymbolicLink(atPath: alias, withDestinationPath: "/usr")
-        defer {
-            try? FileManager.default.removeItem(atPath: alias)
-            try? FileManager.default.removeItem(atPath: dir)
-        }
+        defer { try? FileManager.default.removeItem(atPath: alias) }
         let lr = try load("""
         {"version":1,"rules":[
           {"id":"escape","category":"system","safety":"safe","path":"\(alias)"}
@@ -968,6 +959,7 @@ final class RuleStoreTests: XCTestCase {
         """)
         XCTAssertTrue(lr.rules.isEmpty)
         XCTAssertEqual(lr.rejected.count, 1)
+        XCTAssertTrue(lr.rejected[0].contains("超出允许作用域"))   // 锁定:解析形态的作用域校验拦截
     }
 
     func testEffectiveAction_defaultsToTrash() throws {
