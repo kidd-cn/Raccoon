@@ -55,3 +55,4 @@
 "reason.no-permission" = "权限不足";
 "reason.other" = "其他原因";
 "reason.snapshot-failed" = "快照清理失败";
+"reason.invalid-path" = "路径无效";

@@ -55,3 +55,4 @@
 "reason.no-permission" = "No permission";
 "reason.other" = "Other reason";
 "reason.snapshot-failed" = "Snapshot cleanup failed";
+"reason.invalid-path" = "Invalid path";

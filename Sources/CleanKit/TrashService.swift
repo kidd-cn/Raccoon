@@ -3,7 +3,7 @@ import Foundation
 public enum TrashOutcome: Equatable, Sendable {
     case trashed
     case vanished
-    case skipped(reason: String)   // 稳定代码:"no-permission" / "protected" / "snapshot-failed" / "other"
+    case skipped(reason: String)   // 稳定代码:"no-permission" / "protected" / "invalid-path" / "snapshot-failed" / "other"
 }
 
 public protocol TrashServicing: Sendable {

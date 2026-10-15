@@ -17,13 +17,14 @@ struct ReportView: View {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 44)).foregroundStyle(.green)
             Text(loc("report.done")).font(.title2).bold()
+            // freed 口径:仅统计成功移入废纸篓的字节;vanished(应用抢先删)与快照不计入
             Text(loc("report.freed", byteText(report.freedBytes))).monospacedDigit()
-            Text(loc("report.trashed", report.trashedCount)).foregroundStyle(.secondary)
+            Text(loc("report.trashed", report.trashedCount)).monospacedDigit().foregroundStyle(.secondary)
             if report.vanishedCount > 0 {
-                Text(loc("report.vanished", report.vanishedCount)).foregroundStyle(.secondary)
+                Text(loc("report.vanished", report.vanishedCount)).monospacedDigit().foregroundStyle(.secondary)
             }
             if report.snapshotCount > 0 {
-                Text(loc("report.snapshots", report.snapshotCount)).foregroundStyle(.secondary)
+                Text(loc("report.snapshots", report.snapshotCount)).monospacedDigit().foregroundStyle(.secondary)
             }
             if !report.skipped.isEmpty {
                 DisclosureGroup(loc("report.skipped", report.skipped.count)) {

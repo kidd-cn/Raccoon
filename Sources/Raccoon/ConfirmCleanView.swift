@@ -28,12 +28,14 @@ struct ConfirmCleanView: View {
                 }
             }
 
+        // 删除前最后一道 UI 防线:默认键(⏎)给取消,清理仅点按触发;
+        // 实际防护在执行链(扫描过滤 + executor 删除前 isDenied),本弹窗防的是误操作
             HStack {
                 Spacer()
                 Button(loc("common.cancel")) { vm.confirmPresented = false }
                     .keyboardShortcut(.cancelAction)
+                    .keyboardShortcut(.defaultAction)   // 破坏性确认的默认键给取消(HIG 惯例,⏎=安全侧)
                 Button(loc("common.moveToTrash")) { vm.cleanSelected() }
-                    .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
             }
         }
