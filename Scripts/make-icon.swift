@@ -10,10 +10,12 @@ NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: size, height: size), xRadius
 let para = NSMutableParagraphStyle(); para.alignment = .center
 let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 620), .paragraphStyle: para]
 NSAttributedString(string: "🦝", attributes: attrs)
+    // -30: emoji 字形基于行高定位,重心偏上,经验性下移做视觉居中校正(实测)
     .draw(in: NSRect(x: 0, y: (size - 620) / 2 - 30, width: size, height: 700))
 image.unlockFocus()
 guard let tiff = image.tiffRepresentation,
       let rep = NSBitmapImageRep(data: tiff),
       let png = rep.representation(using: .png, properties: [:]) else { fatalError("render failed") }
-try! png.write(to: URL(fileURLWithPath: out))
+do { try png.write(to: URL(fileURLWithPath: out)) }
+catch { fatalError("写 \(out) 失败: \(error)") }
 print("✅ \(out)")
