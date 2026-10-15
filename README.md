@@ -33,7 +33,7 @@ macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 
 
 ## 构建与运行
 
-依赖:macOS 14+,Swift 6 工具链(仅 Command Line Tools 即可,无需完整 Xcode)。
+依赖:macOS 14+,Swift 6.3+ 工具链(仅 Command Line Tools 即可,无需完整 Xcode);CI 在 GitHub macOS runner 上以 Xcode 工具链验证。
 
 ```bash
 swift build            # 构建

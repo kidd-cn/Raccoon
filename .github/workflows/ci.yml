@@ -16,7 +16,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # 先打工具链信息:构建失败时第一眼要能判断是代码问题还是 runner 镜像/SDK 不匹配
       - name: 工具链信息
