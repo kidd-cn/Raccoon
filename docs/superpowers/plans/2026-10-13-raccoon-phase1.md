@@ -3457,6 +3457,8 @@ Expected: .app 正常启动,图标/名称正确;`codesign -dv build/Raccoon.app`
 git add -A && git commit -m "chore: .app 组装脚本 + Info.plist + 占位图标(adhoc 签名)"
 ```
 
+> **执行记录(Task 16,已关闭)** 实现(84e282a)+ 2 处本机必修适配(均经实验佐证、规格审查裁决接受):① 现代 codesign 不自动深签未签名嵌套 bundle → 先内层 find 逐签再签外层;② resource_bundle_accessor 候选路径不含 Contents/MacOS/(首候选 Bundle.main.resourceURL=Resources),bundle 双拷 MacOS/+Resources/,单拷必 fatalError。计划原稿 find 无 -L 已由协调方预修(43b6384)。规格审查 ❌→修复(ad1a0ea):占位图标未居中(draw(in:) 默认左对齐)→ 居中段落样式;守卫注释与实现对齐;工具链无 NSTextAlignment.centered,用 .center(正当修正)。质量审查 Approved(零 Important):M-1 try!→do/catch 带路径报错、M-2 -30 魔数注释已顺手落(07dec53);**M-3(Info.plist 可选键 CFBundleInfoDictionaryVersion/LSApplicationCategoryType,bundle id 大写 Raccoon 合法非惯例)缓议 → 分发/上架前 polish**。无头验证链:plutil lint + 结构核验(2 bundle 在位 + Signature=adhoc)+ .app 二进制 8s 活性(Bundle.module 解析随验)+ 75 绿;open GUI 目测顺延 Task 17。
+
 ---
 
 ### Task 17: README + LICENSE + 手动 QA + 验收核对
