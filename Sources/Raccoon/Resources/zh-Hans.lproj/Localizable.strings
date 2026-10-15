@@ -49,6 +49,7 @@
 "settings.exclusions" = "排除清单";
 "settings.exclusionsHint" = "这些路径将永不扫描、永不删除";
 "settings.add" = "添加路径…";
+"settings.remove" = "移除";
 "settings.about" = "关于";
 "settings.aboutBody" = "Raccoon 浣熊清理 · 开源（MIT）\n所有删除仅移入废纸篓。";
 "reason.protected" = "受保护路径";

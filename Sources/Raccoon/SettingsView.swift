@@ -37,6 +37,7 @@ struct ExclusionsPane: View {
                             Image(systemName: "trash")
                         }
                         .buttonStyle(.borderless)
+                        .accessibilityLabel(loc("settings.remove"))
                     }
                 }
             }

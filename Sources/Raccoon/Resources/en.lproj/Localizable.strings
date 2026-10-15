@@ -49,6 +49,7 @@
 "settings.exclusions" = "Exclusions";
 "settings.exclusionsHint" = "These paths are never scanned and never deleted";
 "settings.add" = "Add Path…";
+"settings.remove" = "Remove";
 "settings.about" = "About";
 "settings.aboutBody" = "Raccoon · open source (MIT)\nEverything deleted goes to the Trash only.";
 "reason.protected" = "Protected path";
