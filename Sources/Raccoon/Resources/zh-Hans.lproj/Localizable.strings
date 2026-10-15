@@ -37,7 +37,7 @@
 "detail.empty" = "该类别没有可清理项";
 "confirm.title" = "确认清理";
 "confirm.runningWarning" = "有应用正在运行，建议先退出相关应用再清理";
-"confirm.cautiousSection" = "以下谨慎项将一并移入废纸篓：";
+"confirm.cautiousSection" = "以下谨慎项将被清理：文件移入废纸篓；本地快照由系统直接回收，不经废纸篓";
 "report.done" = "清理完成";
 "report.freed" = "本次释放 %@";
 "report.trashed" = "%d 项已移入废纸篓";

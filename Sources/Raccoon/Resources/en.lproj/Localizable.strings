@@ -37,7 +37,7 @@
 "detail.empty" = "Nothing to clean in this category";
 "confirm.title" = "Confirm Cleanup";
 "confirm.runningWarning" = "Some apps are running — consider quitting them first";
-"confirm.cautiousSection" = "These caution items will also be moved to Trash:";
+"confirm.cautiousSection" = "These caution items will be cleaned: files move to Trash; local snapshots are reclaimed by the system, bypassing Trash";
 "report.done" = "Cleanup Complete";
 "report.freed" = "Freed %@";
 "report.trashed" = "%d items moved to Trash";

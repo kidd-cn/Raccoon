@@ -16,12 +16,12 @@
 ### 2. cautious 类别默认全不勾选,橙色标识 — 混合(自动 + 待人工)
 
 - ✅ 自动核验:默认选择集只含「safe 且未运行」——`Tests/AppCoreTests/ScanViewModelTests.swift:33-45`(cautious 与 running 构造项均不进 `selectedPaths`,断言 `== ["/a"]`);选择逻辑源头 `Sources/AppCore/ScanViewModel.swift:67`。
-- ⏳ 待人工:橙色标识目测。步骤:扫描后查看 cautious 卡片描边与明细页「谨慎」标签为橙色(`Sources/Raccoon/DetailListView.swift:77` 已落 `.orange`,颜色是否如预期需人眼)。
+- ⏳ 待人工:橙色标识目测。步骤:扫描后查看 cautious 卡片描边与明细页「谨慎」标签为橙色(`Sources/Raccoon/DetailListView.swift` 中 cautious TagView 行已落 `color: .orange`,颜色是否如预期需人眼)。
 
 ### 3. 运行中应用缓存项黄色「应用运行中」且默认不勾选 — 混合(自动 + 待人工)
 
 - ✅ 自动核验:检测逻辑 `defaultMode_runningAppFlagged`(`Tests/ScanKitTests/ScanEngineTests.swift`)、`testWorkspaceDetector_returnsSet`(`Tests/CleanKitTests/SystemIntegrationTests.swift:29`);默认不勾选同上项(`ScanViewModelTests.swift:35,45`)。
-- ⏳ 待人工:黄色标签目测。步骤:保持某应用(如 Safari/微信)运行 → 扫描 → 明细页该应用缓存行应显示黄色「应用运行中」胶囊(`Sources/Raccoon/DetailListView.swift:76`)且默认未勾选。
+- ⏳ 待人工:黄色标签目测。步骤:保持某应用(如 Safari/微信)运行 → 扫描 → 明细页该应用缓存行应显示黄色「应用运行中」胶囊(`Sources/Raccoon/DetailListView.swift` 中 appRunning TagView 行,`color: .yellow`)且默认未勾选。
 
 ### 4. 明细勾选联动底部「已选 N 项 · X GB」 — ✅ 自动核验
 
@@ -73,7 +73,7 @@
 
 ### 13. NSOpenPanel 添加/删除排除路径交互流目测(Task 15 顺延)— ⏳ 待人工
 
-- 步骤:设置 → 排除清单 → 「添加路径…」→ NSOpenPanel 弹出、可选文件或文件夹(设计取舍见 `Sources/Raccoon/SettingsView.swift:51-52` 注释)→ 选定后列表出现该路径 → 点该行 trash 按钮(本轮已加 `settings.remove` 无障碍标签)→ 路径消失且重扫后结果恢复出现。
+- 步骤:设置 → 排除清单 → 「添加路径…」→ NSOpenPanel 弹出、可选文件或文件夹(设计取舍见 `Sources/Raccoon/SettingsView.swift:52-53` 注释)→ 选定后列表出现该路径 → 点该行 trash 按钮(本轮已加 `settings.remove` 无障碍标签)→ 路径消失且重扫后结果恢复出现。
 
 ### 14. 全程演练:扫描→卡片→明细→勾选→「清理…」→确认弹窗→「移入废纸篓」→报告→「再扫一次」回 idle;废纸篓确有项目且可放回(Task 14 顺延)— ⏳ 待人工
 
@@ -87,7 +87,7 @@
 
 ### 16. VoiceOver 抽查:明细行 Toggle 与设置 trash 按钮读出有意义 label(本轮部分 A 修复后)— 混合(修复已落 + 待人工)
 
-- ✅ 自动核验(修复落位):`Sources/Raccoon/DetailListView.swift:66-69`(明细 Toggle 加 `.accessibilityLabel(hit.appName ?? hit.path)`)与 `Sources/Raccoon/SettingsView.swift:40`(trash 按钮加 `.accessibilityLabel(loc("settings.remove"))`);`settings.remove` 键 en/zh 双语落位(L10n 58→59);`swift build` 零错误、75/75 绿(提交 883a4e2)。
+- ✅ 自动核验(修复落位):`Sources/Raccoon/DetailListView.swift` 明细 Toggle 的 `.accessibilityLabel`(快照项与可见标题同源读本地化快照文案,普通项读 `hit.appName ?? hit.path`)与 `Sources/Raccoon/SettingsView.swift:40`(trash 按钮加 `.accessibilityLabel(loc("settings.remove"))`);`settings.remove` 键 en/zh 双语落位(L10n 58→59);`swift build` 零错误、75/75 绿(提交 883a4e2)。
 - ⏳ 待人工:VoiceOver 实读。步骤:开启 VoiceOver(Cmd+F5)→ Tab/VO 方向键聚焦明细行勾选框 → 应读出条目应用名(或路径)而非空白;聚焦设置排除清单 trash 按钮 → 应读出「移除」/「Remove」。
 
 ## §11 验收核对(规格六条 Done 定义)

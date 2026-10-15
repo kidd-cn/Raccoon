@@ -65,8 +65,11 @@ struct DetailRow: View {
             // 勾选状态唯一源自 vm.selectedPaths;set 弃用 newValue、统一走 toggle 翻转,勿在此写回
             Toggle(String(), isOn: Binding(get: { selected }, set: { _ in onToggle() }))
                 .labelsHidden()
-                // 空 label 仅服务视觉布局;VoiceOver 语义走本修饰符,读条目展示名(缺 app 名时读路径)
-                .accessibilityLabel(hit.appName ?? hit.path)
+                // 空 label 仅服务视觉布局;VoiceOver 语义走本修饰符:快照项与可见标题同源
+                // (path 是 tmutil:// 伪标签,不能进旁白),普通项读展示名、缺 app 名时读路径
+                .accessibilityLabel(hit.action == .tmutilThin
+                    ? (hit.snapshotDate.map { loc("detail.snapshot", $0) } ?? hit.path)
+                    : (hit.appName ?? hit.path))
             AppIconView(bundleID: hit.bundleID)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).lineLimit(1)

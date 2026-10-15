@@ -4,7 +4,7 @@ macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 
 
 - **macOS 原生**:Swift 6 + SwiftUI,纯系统控件,自动浅色/深色模式,零第三方依赖
 - **中英双语**:简体中文 / English,跟随系统语言
-- **核心价值主张:安全**。所有删除只进废纸篓、默认只勾选可再生内容、多层保护机制兜底
+- **核心价值主张:安全**。文件删除只进废纸篓;本地快照经系统 `tmutil` 回收(见谨慎项)、默认只勾选可再生内容、多层保护机制兜底
 
 ## 当前功能(一期)
 
@@ -25,7 +25,7 @@ macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 
 | 1 | **内置硬保护** | 用户内容目录(`~/Desktop`、`~/Documents`、`~/Downloads` 等)与 `~/Library` 关键子目录(Mail、Keychains、Preferences 等)按路径组件级前缀匹配保护,命中即拒绝加载、拒绝展示、删除前再校验一次。**规则可以写错,引擎不许删错。** |
 | 2 | **用户排除清单** | 设置页添加的路径在扫描阶段即被过滤,结果中根本不出现 |
 | 3 | **安全分级** | `safe` 规则默认勾选;`cautious` 规则默认不勾选、橙色标识、确认弹窗单独分区;运行中应用的缓存项标黄「应用运行中」并默认不勾选 |
-| 4 | **只进废纸篓** | 删除动作唯一实现是 `FileManager.trashItem`,绝不 unlink、绝不抹除,用户可随时从废纸篓恢复 |
+| 4 | **只进废纸篓** | 文件删除动作唯一实现是 `FileManager.trashItem`,绝不 unlink、绝不抹除;唯一例外是本地快照清理(`tmutil-thin`),由系统 `tmutil deletelocalsnapshots` 执行、不可经废纸篓恢复——故列为 cautious 单独确认 |
 
 配套保障:规则根作用域白名单(必须位于用户主目录内,唯一例外是 `/Applications` 下的 macOS 安装器)、符号链接解析前后双形态校验(别名指进保护根或逃出主目录均整条拒绝)、单条规则校验失败仅拒绝该条并记录,绝不静默放行。
 
@@ -76,7 +76,9 @@ Scripts/bundle-app.sh  # 组装 Raccoon.app(adhoc 签名,输出到 build/)
 | `path` | 是 | 支持 `~` 展开;必须是具体目录,根不支持 glob |
 | `include` | 否 | 文件名 glob 白名单(如 `[".DS_Store"]`),空 = 目录全部内容 |
 | `exclude` | 否 | 相对 glob 排除 |
-| `description` | 是 | `zh-Hans` 与 `en` 双语说明,删了什么、有什么后果 |
+| `description` | 否(推荐) | `zh-Hans` 与 `en` 双语说明,删了什么、有什么后果 |
+
+内置规则由测试强制双语——`bundledRulesCoverAllCategoriesAndHaveLocalizedDescriptions` 要求每条含 `zh-Hans` 与 `en` description,PR 缺失会挂测试;提交前跑 `Scripts/test.sh` 确认。
 
 ### 校验规则(加载时逐条执行,以 `Sources/ScanKit/RuleStore.swift` 为准)
 
