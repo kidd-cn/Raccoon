@@ -3534,7 +3534,7 @@ git add -A && git commit -m "docs: README/LICENSE,一期验收完成"
 1. 报告页全跳过仍显示成功图标(Task 14 M-2:trashedCount==0 && !skipped.isEmpty 时图标条件化)
 2. 报告页死胡同:消费 `common.close` 加关闭按钮(Task 14 M-5)
 3. **§8 FDA 深链引导**(终审 I-2):TCC 拒绝失败面过大时,报告页引导授予完全磁盘访问权限(`x-apple.systempreferences` 深链)
-4. CI:GitHub Actions macOS runner,门槛 75 绿(I-3/QA 已记录)
+4. ~~CI:GitHub Actions macOS runner~~ **已完成(2026-10-15)**:`.github/workflows/ci.yml`(macos-latest:`swift build` → `Scripts/test.sh` → L10n 键集 1:1),run 38745292484 实测绿;顺带修掉 `swift-tools-version` 6.4→6.3 的下限虚高(首跑即红于此)
 5. 明细工具栏补「反选」或登记规格偏差(终审 M-1:spec §7.2.4 原文有,计划即偏离且无裁决记录)
 6. 清理逐项进度接线:CleanExecutor.onProgress(已有+有测试)→ ScanViewModel → UI(终审 M-2)
 7. rejected/warnings 落 os.Logger:AppScanService.swift:17-18 现直接丢弃;社区规则落地(PR 通道)前必须完成(终审 M-3)
@@ -3590,5 +3590,15 @@ git add -A && git commit -m "docs: README/LICENSE,一期验收完成"
 **落地**:`ScanViewModel.returnToResults()`(新增,仅报告态可达)、`remainingBytes`(新增);`ReportView` 增剩余行与返回按钮;L10n +2 `report.remaining`/`report.backToList`(62 键 1:1);测试 +2 `cleanSelected_partialSelectionKeepsRemainingAndReturnsToList`、`returnToResults_guardedOutsideReport`(AppCore 13→15,总 **81 绿**)。README 清理流、QA 清单项 5/14 同步。分支 `feat/partial-clean-continue`。
 
 **取舍**:返回列表不重扫,结果可能随磁盘变化略旧(仅剩未清理/被跳过项,均未被本次清理触碰);若用户想刷新,「再扫一次」仍在其旁。返回时**不**重新套用默认勾选(safe && !running),保留用户自己的勾选意志——已清理项从选择集移除,其余原样。
+
+### 2026-10-15 CI 补齐(用户要求「加 CI 并推」)
+
+**落地**:`.github/workflows/ci.yml` —— `macos-latest` 上跑 `swift build` → `Scripts/test.sh` → zh/en L10n 键集 1:1 比对;先打 `sw_vers`/`xcode-select -p`/`swift --version`(失败时一眼分辨代码问题还是镜像/SDK 不匹配);`concurrency` 取消同分支旧运行;门槛不写死用例数(数字会漂,实际计数由测试输出给出)。README 加徽章与 CI 说明段。
+
+**首跑即红(如实记录)**:`error: 'raccoon': package 'raccoon' is using Swift tools version 6.4.0 but the installed version is 6.3.3` —— `swift-tools-version` 是**最低要求**而非版本记录,原值 6.4 跟随本机工具链写就,后果是所有用已发布 Xcode 的贡献者一律构建失败(开源仓尤其致命)。修正为 **6.3**(6.x 系列语言模式同为 Swift 6,语义不变),而非挑选更新的 runner 绕过;`actions/checkout` 4→5 顺带清掉 Node 20 弃用告警。
+
+**实测证据**:run 38745292484 全绿,runner 为 macOS 26.6.2 / Xcode 26.6 / Swift 6.3.3,日志 `Test run with 81 tests in 14 suites passed`;本地 CLT 6.4 侧同 81 绿,两套工具链都覆盖。
+
+**取舍**:未做 `Scripts/test.sh` 的 CLT 插件库 flag 剥离 —— 改为按 `xcode-select -p` 判定是否加载该 flag(本地 CLT 行为不变,CI 的完整 Xcode 下该路径不存在、加了会报错),保持「单一测试入口」;CI 未设为必需检查(branch protection),单维护者仓库暂无必要。
 
 

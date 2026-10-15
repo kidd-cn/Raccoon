@@ -4,6 +4,8 @@
 >
 > - **✅ 自动核验**:证据为测试名(`Tests/` 文件:行)或代码落位;全部 81 用例经 `Scripts/test.sh` 于本仓库全绿(40+26+15)。
 > - **⏳ 待人工**:需 GUI 交互或人眼判断,附操作步骤。
+>
+> **两条工具链**:本机为 CLT-only(Swift 6.4 / macOS 27 SDK),CI 为 GitHub runner 的完整 Xcode(Xcode 26.6 / Swift 6.3.3 / macOS 26.6.2)。`Package.swift` 的 `swift-tools-version` 取下限 6.3 以覆盖两者;81 用例在两套工具链上均全绿。
 
 ## 一、计划原生 12 项
 
@@ -106,7 +108,7 @@
 | 2 | 全部安全机制生效,恶意规则回归测试通过 | **满足** | 恶意规则回归:`testLoad_securityRegression_ruleAtProtectedPathRejected`、`testLoad_symlinkAliasToProtectedRejected`、`testLoad_symlinkEscapingHomeRejected`、`testI2_applicationsWildcardIncludeRejected`、`testSecurityRegression_rulePointingAtProtectedRootIsConflict`(RuleStoreTests)、`testClean_securityRegression_neverTrashesProtectedEvenIfInjected`(CleanExecutorTests,注入勾选后删除前仍拦截)、`testCleanSelected_skipsProtectedAtExecutorLevel`(ScanViewModelTests:92-107)、`testM1_rootPathConflictsWithEverything`、`testComponentPrefixMatch_notStringPrefix`、`testDefaultHardRoots_coverUserContentAndLibraryKeys`、`testC1_caseInsensitiveProtection`(ProtectionStoreTests)。四道门各有测试锚点;RuleStore 校验逻辑见 `Sources/ScanKit/RuleStore.swift:55-75`。 |
 | 3 | 清理仅产生废纸篓入项,可恢复 | **部分** | 自动面:删除动作唯一实现 `FileManager.trashItem`(`Sources/CleanKit/TrashService.swift`,无 unlink 路径);`testFileManagerTrashService_trashesTempFile` 真实移入废纸篓;报告计数与勾选一致(`testCleanSelected_reportsWritesHistory_andDismiss`)。缺口:「放回恢复」为系统废纸篓固有行为,本项目侧的实证属 GUI 人工(清单项 5/14)。 |
 | 4 | 中英文、浅色深色完整适配 | **部分** | 自动面:en/zh 两份 Localizable.strings 各 62 键 1:1(`settings.remove`/`detail.selectedAll`/`report.remaining`/`report.backToList`);全部用户可见文案经 `loc()` 消费;`bundledRulesCoverAllCategoriesAndHaveLocalizedDescriptions` 保证规则描述双语;UI 纯系统控件+语义色,无硬编码颜色。缺口:语言切换与深浅色实际观感属人眼(清单项 8/9)。 |
-| 5 | ScanKit/CleanKit 单测覆盖核心路径,CI(macOS runner)绿 | **部分** | 单测:81 用例全绿(本机 `Scripts/test.sh`:CleanKit 40 + ScanKit 26 + AppCore 15,Swift Testing @Test 共 81)。**CI 如实说明:本仓库尚无 CI 配置(无 `.github/` 目录),「CI 绿」待补**。补入口径:GitHub Actions `macos-latest` runner,步骤 `swift build && Scripts/test.sh`,以 81 全绿为门槛。 |
+| 5 | ScanKit/CleanKit 单测覆盖核心路径,CI(macOS runner)绿 | **满足** | 单测:81 用例全绿(本机 `Scripts/test.sh`:CleanKit 40 + ScanKit 26 + AppCore 15,Swift Testing @Test 共 81)。**CI 已补并实测绿**(2026-10-15,`.github/workflows/ci.yml`):GitHub Actions `macos-latest`(run 38745292484,runner 实测 macOS 26.6.2 / Xcode 26.6 / Swift 6.3.3)步骤 `swift build` → `Scripts/test.sh`(日志 `Test run with 81 tests in 14 suites passed`)→ zh/en L10n 键集 1:1 比对,全绿。首跑曾红在构建:`swift-tools-version` 原为 6.4 高于 runner 的 6.3.3,已修正下限为 6.3(见下)。 |
 | 6 | 在本机完成一次真实扫描+清理演练,人工核对结果无误 | **待人工** | 天然人工项,对应清单项 14 的完整演练;本环境无 GUI 人工执行能力。前期已完成的无头替代:Task 16 .app 组装 + 8 秒活性探活、Task 15 直接启动探活(见计划文档执行记录),但不构成人工核对。 |
 
 ## 统计
@@ -117,4 +119,4 @@
 - **混合(自动部分 + 待人工部分):10 项**(项 2、3、4、5、6、7、10、11、15、16)——每项均给出自动化证据与待人工步骤,自动部分未替人工背书。
 - **⏳ 整体待人工:6 项**(项 1、8、9、12、13、14)。
 
-§11 六条:满足 1(第 2 条)、部分 4(第 1/3/4/5 条)、待人工 1(第 6 条);工程侧唯一缺口是 CI 配置(待补,补入口径见上表第 5 条)。
+§11 六条:满足 2(第 2、5 条)、部分 3(第 1/3/4 条)、待人工 1(第 6 条)。**工程侧缺口已清零**:CI 于 2026-10-15 补齐并实测绿(第 5 条),余下全属真机 GUI 人工项(第 1/3/4 条的人工半段 + 第 6 条全程演练)。
