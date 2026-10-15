@@ -70,12 +70,14 @@ struct CleanupHomeView: View {
             .padding(.bottom, 12)
             footerNotes
         }
+        // 明细导航用 item: 而非 NavigationLink:用户 pop 时自动写回 nil;
+        // 但若目标页在栈上时本视图因 phase 切换离开层级,写回无契约保证——
+        // 故 startScan/dismissReport 一并复位 categoryInFocus(双保险)。
         .navigationDestination(item: $vm.categoryInFocus) { category in
             DetailListView(vm: vm, category: category)
         }
     }
 
-    @ViewBuilder
     var footerNotes: some View {
         VStack(alignment: .leading, spacing: 4) {
             if vm.permissionSkippedCount > 0 {

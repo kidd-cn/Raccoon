@@ -122,6 +122,19 @@ final class ScanViewModelTests {
         #expect(calls == ["/a"])           // 仅一次清理
         guard case .report = vm.phase else { Issue.record("应仍在 report"); return }
     }
+
+    // 质量 Important:categoryInFocus 跨阶段残留会在下次完成态自动推入旧明细页,须复位
+    @Test func startScan_resetsCategoryInFocus() async {
+        let vm = makeVM(service: FakeScanService(result: .init(
+            hits: [hit("/a", 100)], summaries: [], permissionSkippedCount: 0,
+            truncatedRuleIDs: [], excludedCount: 0)), trash: MockTrash(outcome: .trashed))
+        vm.startScan()
+        await vm.task?.value
+        vm.categoryInFocus = .system      // 模拟明细页在栈上时的残留
+        vm.startScan()
+        await vm.task?.value
+        #expect(vm.categoryInFocus == nil)
+    }
 }
 
 struct FailingScanService: ScanServicing {

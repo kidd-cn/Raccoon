@@ -48,7 +48,7 @@ public final class ScanViewModel {
     public func startScan() {
         guard phase != .scanning && phase != .cleaning else { return }
         phase = .scanning
-        hits = []; summaries = []; selectedPaths = []
+        hits = []; summaries = []; selectedPaths = []; categoryInFocus = nil
         permissionSkippedCount = 0; truncatedRuleIDs = []; excludedCount = 0
         progress = ScanProgress(rulesDone: 0, rulesTotal: 0, hitsFound: 0, bytesFound: 0)
         task = Task { [weak self] in await self?.runScan() }
@@ -121,7 +121,7 @@ public final class ScanViewModel {
 
     public func dismissReport() {
         phase = .idle
-        hits = []; summaries = []; selectedPaths = []
+        hits = []; summaries = []; selectedPaths = []; categoryInFocus = nil
         permissionSkippedCount = 0; truncatedRuleIDs = []; excludedCount = 0
         progress = ScanProgress(rulesDone: 0, rulesTotal: 0, hitsFound: 0, bytesFound: 0)
     }
