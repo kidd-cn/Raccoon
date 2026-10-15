@@ -3402,7 +3402,8 @@ cp ".build/$CONFIG/Raccoon" "$APP/Contents/MacOS/Raccoon"
 cp "Scripts/Info.plist" "$APP/Contents/Info.plist"
 
 # SwiftPM 资源 bundle(rules.json、本地化)需与可执行文件同目录
-find ".build/$CONFIG" -maxdepth 1 -name "*.bundle" -exec cp -R {} "$APP/Contents/MacOS/" \;
+# -L 必须:.build/$CONFIG 是符号链接(→ arm64-apple-macosx/$CONFIG),find 默认不跟随,会拷 0 个 bundle
+find -L ".build/$CONFIG" -maxdepth 1 -name "*.bundle" -exec cp -R {} "$APP/Contents/MacOS/" \;
 
 # 占位图标(若已生成;|| true 防 set -e 下条件短路误退脚本)
 if [ -f "build/AppIcon.png" ]; then cp "build/AppIcon.png" "$APP/Contents/Resources/AppIcon.png"; fi
