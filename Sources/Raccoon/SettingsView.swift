@@ -3,7 +3,8 @@ import AppKit
 import AppCore
 
 struct SettingsView: View {
-    @Bindable var exclusions: ExclusionsStore
+    // 本体只读转发给子 pane(绑定需求在 pane 内各自 @Bindable),故用 let;RootView 同口径
+    let exclusions: ExclusionsStore
 
     var body: some View {
         TabView {
@@ -47,6 +48,8 @@ struct ExclusionsPane: View {
         }
     }
 
+    // 用 NSOpenPanel 而非 SwiftUI fileImporter:后者无法同时表达「文件+文件夹混选」
+    // (canChooseFiles + canChooseDirectories),排除清单两者都需要,勿「顺手现代化」。
     func addPath() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
