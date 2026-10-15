@@ -3122,6 +3122,10 @@ Expected: 扫描完成后点类别卡片 → 明细列表按大小降序、显�
 git add -A && git commit -m "feat(Raccoon): 明细列表页(勾选/标签/图标/底部已选栏)"
 ```
 
+> **Task 13 实现与质量记录(控制器追认):**
+> - 实现 c8cfba7:一处计划笔误修正(`TagView(loc(...), color:)` → `TagView(text:...)`,规格位置实参与声明成员名不符,同 Task 10 hit() 标签类);全部引用的 vm API(toggle/selectAll(in:)/selectNone(in:)/uncheckCautiousAndRunning/selectedBytes)编译验证存在。构建零错误、启动存活、75/75 绿。spec 审查 ✅ 零缺失零多余。
+> - 质量审查 **Approved**(零 Important):勾选状态单源、双通道不双触发、NSWorkspace 主线程语义均确认成立;TagView/AppIconView 判为 Task 14/15 可复用。Minor 1(DetailRow 两行契约注释)已补 f16d87e;Minor 2(**Toggle 无 a11y 标签**)归入 **Task 17 QA 批次**(`.accessibilityLabel(title)` 或行级 `.accessibilityElement(children: .combine)`)。
+
 ---
 
 ### Task 14: 确认弹窗 + 完成报告
