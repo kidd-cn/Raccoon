@@ -62,6 +62,7 @@ struct DetailRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            // 勾选状态唯一源自 vm.selectedPaths;set 弃用 newValue、统一走 toggle 翻转,勿在此写回
             Toggle(String(), isOn: Binding(get: { selected }, set: { _ in onToggle() }))
                 .labelsHidden()
             AppIconView(bundleID: hit.bundleID)
@@ -79,6 +80,7 @@ struct DetailRow: View {
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
+        // 行级 tap 依赖 SwiftUI 控件优先权:点 Toggle 不触发本手势,双通道各触发一次
         .onTapGesture { onToggle() }
     }
 }
