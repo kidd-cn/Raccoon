@@ -3248,6 +3248,8 @@ Expected: 扫描 → 卡片 → 明细 → 勾选 → 「清理…」→ 确认�
 git add -A && git commit -m "feat(Raccoon): 确认弹窗(cautious 分区/运行中警告)+ 完成报告"
 ```
 
+> **执行记录(Task 14,已关闭)** 实现(dc1fd01,零偏差)+ 质量轮(I-1 Important + 4 Minor):修复 3b1f374——I-1 破坏性确认默认键(⏎)移给取消(与 .cancelAction 共存于同一按钮,编译通过);M-1 补 `reason.invalid-path` 双语键(L10n 57→58,TrashService 注释列全 5 稳定代码);M-3 补「UI 防线」「freed 口径」两处契约注释;M-4 报告三行计数 .monospacedDigit。复审通过(af8e910,Approved),缩进零操作观察已顺手对齐(088a24f)。**M-2(全跳过仍显示成功图标:trashedCount==0 && !skipped.isEmpty 时应有条件图标)、M-5(报告页死胡同,common.close 键未被消费) adjudicated 缓议 → polish 清单**。全程演练(Step 3 的交互式目测)顺延 Task 17 QA。计划文本笔误登记:hit() 参数应为 `size:` 标签(同 Task 10 类)。
+
 ---
 
 ### Task 15: 设置页(排除清单 + 关于)
