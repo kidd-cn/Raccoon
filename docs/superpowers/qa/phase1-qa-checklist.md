@@ -2,7 +2,7 @@
 
 > **诚实性声明**:本文档生成于无 GUI 自动化环境(实现子代理,CLT 6.4 / macOS 27.0 SDK)。本环境无法进行人工目测与 GUI 交互,故每项明确标注「✅ 自动核验」「⏳ 待人工」或混合拆分,**绝无将待人工项标成已验**。
 >
-> - **✅ 自动核验**:证据为测试名(`Tests/` 文件:行)或代码落位;全部 75 用例经 `Scripts/test.sh` 于本 worktree 全绿(40+26+9)。
+> - **✅ 自动核验**:证据为测试名(`Tests/` 文件:行)或代码落位;全部 76 用例经 `Scripts/test.sh` 于本仓库全绿(40+26+10)。
 > - **⏳ 待人工**:需 GUI 交互或人眼判断,附操作步骤。
 
 ## 一、计划原生 12 项
@@ -23,10 +23,11 @@
 - ✅ 自动核验:检测逻辑 `defaultMode_runningAppFlagged`(`Tests/ScanKitTests/ScanEngineTests.swift`)、`testWorkspaceDetector_returnsSet`(`Tests/CleanKitTests/SystemIntegrationTests.swift:29`);默认不勾选同上项(`ScanViewModelTests.swift:35,45`)。
 - ⏳ 待人工:黄色标签目测。步骤:保持某应用(如 Safari/微信)运行 → 扫描 → 明细页该应用缓存行应显示黄色「应用运行中」胶囊(`Sources/Raccoon/DetailListView.swift` 中 appRunning TagView 行,`color: .yellow`)且默认未勾选。
 
-### 4. 明细勾选联动底部「已选 N 项 · X GB」 — ✅ 自动核验
+### 4. 明细勾选联动底部「已选 N 项 · X GB」 — 混合(自动 + 待人工)
 
-- 证据:`Tests/AppCoreTests/ScanViewModelTests.swift:49-50`(toggle `/b` 后 `selectedBytes == 30`);`toggle/selectAll/selectNone/uncheckCautiousAndRunning` 全路径在 `ScanViewModel.swift:81-95`,bottomBar 文案绑定 `vm.selectedPaths.count` 与 `selectedBytes`(`Sources/Raccoon/DetailListView.swift:42`,SwiftUI 声明式绑定保证显示一致)。
-- 结果:联动数值逻辑全绿;显示格式(`detail.selected` 键,59 键 L10n 之一)双语齐备。
+- ✅ 自动核验:本类口径与全局口径分档 `selectedScope_perCategoryAndGlobal`(`Tests/AppCoreTests/ScanViewModelTests.swift:139-176`:本类计数/字节随 `selectNone(in:)/toggle` 同步,全局随之减少);勾选路径 `toggle/selectAll/selectNone/uncheckCautiousAndRunning` 在 `ScanViewModel.swift:81-95`;底栏绑定 `vm.selectedCount(in:)/selectedBytes(in:)`(主)与 `selectedItems/selectedBytes`(副,仅两者不等时显示)——`Sources/Raccoon/DetailListView.swift` 内 `bottomBar`。
+- ⏳ 待人工:目测底栏。「本类已选 N 项」应随进入的类别变化;含跨类选中时其下应有副行「全部类别共 M 项」,副行数字即「清理」按钮的作用范围;仅本类有选中时副行不显示。步骤:扫描 → 进「系统垃圾」记下数字 → 返回进「开发工具缓存」数字应不同。
+- 结果:数值联动逻辑全绿(76 用例);L10n `detail.selected`/`detail.selectedAll` 双语齐备(60 键 1:1)。**2026-10-15 用户报障修复**:原底栏仅用全局口径,进每类数字相同(128 项 · 10.61 GB)且与按类的工具栏范围不一致 → 改为双口径并列。
 
 ### 5. 清理后报告数字与废纸篓项目数一致;放回文件可恢复 — 混合(自动 + 待人工)
 
@@ -51,8 +52,8 @@
 ### 9. 语言切英文界面变英文,删偏好恢复中文 — ⏳ 待人工
 
 - 核验方式:GUI 目测(需重启应用)。
-- 步骤:`defaults write com.raccooncleaner.Raccoon AppleLanguages -array en` → 重启应用 → 全部界面应为英文(59 键 en 全量);`defaults delete com.raccooncleaner.Raccoon AppleLanguages` → 重启 → 恢复中文。
-- 逻辑背书:两份 Localizable.strings 各 59 键 1:1(本轮 `settings.remove` 新增后),`loc()` 消费覆盖全部用户可见文案。
+- 步骤:`defaults write com.raccooncleaner.Raccoon AppleLanguages -array en` → 重启应用 → 全部界面应为英文(60 键 en 全量);`defaults delete com.raccooncleaner.Raccoon AppleLanguages` → 重启 → 恢复中文。
+- 逻辑背书:两份 Localizable.strings 各 60 键 1:1(`settings.remove` 与 `detail.selectedAll` 新增后),`loc()` 消费覆盖全部用户可见文案。
 
 ### 10. history.json 有记录,主页显示「上次清理释放 X」 — 混合(自动 + 待人工)
 
@@ -96,19 +97,19 @@
 
 | # | Done 定义 | 结论 | 证据与缺口 |
 | - | --------- | ---- | ---------- |
-| 1 | 四类规则扫描全流程可用,非开发目录亦能安全运行 | **部分** | 自动面:内置 27 条规则四类全覆盖、零拒绝零告警(`bundledRulesLoadClean`、`bundledRulesCoverAllCategoriesAndHaveLocalizedDescriptions`、`bundledRulesKeyRulesPresent`);非开发目录规则根缺失→空态(`defaultMode_missingRootYieldsEmpty`),75/75 绿。缺口:真机 GUI 全流程目测待人工(清单项 1/14)。 |
+| 1 | 四类规则扫描全流程可用,非开发目录亦能安全运行 | **部分** | 自动面:内置 27 条规则四类全覆盖、零拒绝零告警(`bundledRulesLoadClean`、`bundledRulesCoverAllCategoriesAndHaveLocalizedDescriptions`、`bundledRulesKeyRulesPresent`);非开发目录规则根缺失→空态(`defaultMode_missingRootYieldsEmpty`),76/76 绿。缺口:真机 GUI 全流程目测待人工(清单项 1/14)。 |
 | 2 | 全部安全机制生效,恶意规则回归测试通过 | **满足** | 恶意规则回归:`testLoad_securityRegression_ruleAtProtectedPathRejected`、`testLoad_symlinkAliasToProtectedRejected`、`testLoad_symlinkEscapingHomeRejected`、`testI2_applicationsWildcardIncludeRejected`、`testSecurityRegression_rulePointingAtProtectedRootIsConflict`(RuleStoreTests)、`testClean_securityRegression_neverTrashesProtectedEvenIfInjected`(CleanExecutorTests,注入勾选后删除前仍拦截)、`testCleanSelected_skipsProtectedAtExecutorLevel`(ScanViewModelTests:92-107)、`testM1_rootPathConflictsWithEverything`、`testComponentPrefixMatch_notStringPrefix`、`testDefaultHardRoots_coverUserContentAndLibraryKeys`、`testC1_caseInsensitiveProtection`(ProtectionStoreTests)。四道门各有测试锚点;RuleStore 校验逻辑见 `Sources/ScanKit/RuleStore.swift:55-75`。 |
 | 3 | 清理仅产生废纸篓入项,可恢复 | **部分** | 自动面:删除动作唯一实现 `FileManager.trashItem`(`Sources/CleanKit/TrashService.swift`,无 unlink 路径);`testFileManagerTrashService_trashesTempFile` 真实移入废纸篓;报告计数与勾选一致(`testCleanSelected_reportsWritesHistory_andDismiss`)。缺口:「放回恢复」为系统废纸篓固有行为,本项目侧的实证属 GUI 人工(清单项 5/14)。 |
-| 4 | 中英文、浅色深色完整适配 | **部分** | 自动面:en/zh 两份 Localizable.strings 各 59 键 1:1(本轮新增 `settings.remove`);全部用户可见文案经 `loc()` 消费;`bundledRulesCoverAllCategoriesAndHaveLocalizedDescriptions` 保证规则描述双语;UI 纯系统控件+语义色,无硬编码颜色。缺口:语言切换与深浅色实际观感属人眼(清单项 8/9)。 |
-| 5 | ScanKit/CleanKit 单测覆盖核心路径,CI(macOS runner)绿 | **部分** | 单测:75 用例全绿(本机 `Scripts/test.sh`:CleanKit 40 + ScanKit 26 + AppCore 9,Swift Testing @Test 共 75)。**CI 如实说明:本仓库尚无 CI 配置(无 `.github/` 目录),「CI 绿」待补**。补入口径:GitHub Actions `macos-latest` runner,步骤 `swift build && Scripts/test.sh`,以 75 全绿为门槛。 |
+| 4 | 中英文、浅色深色完整适配 | **部分** | 自动面:en/zh 两份 Localizable.strings 各 60 键 1:1(`settings.remove` 与 `detail.selectedAll`);全部用户可见文案经 `loc()` 消费;`bundledRulesCoverAllCategoriesAndHaveLocalizedDescriptions` 保证规则描述双语;UI 纯系统控件+语义色,无硬编码颜色。缺口:语言切换与深浅色实际观感属人眼(清单项 8/9)。 |
+| 5 | ScanKit/CleanKit 单测覆盖核心路径,CI(macOS runner)绿 | **部分** | 单测:76 用例全绿(本机 `Scripts/test.sh`:CleanKit 40 + ScanKit 26 + AppCore 10,Swift Testing @Test 共 76)。**CI 如实说明:本仓库尚无 CI 配置(无 `.github/` 目录),「CI 绿」待补**。补入口径:GitHub Actions `macos-latest` runner,步骤 `swift build && Scripts/test.sh`,以 76 全绿为门槛。 |
 | 6 | 在本机完成一次真实扫描+清理演练,人工核对结果无误 | **待人工** | 天然人工项,对应清单项 14 的完整演练;本环境无 GUI 人工执行能力。前期已完成的无头替代:Task 16 .app 组装 + 8 秒活性探活、Task 15 直接启动探活(见计划文档执行记录),但不构成人工核对。 |
 
 ## 统计
 
 按条目整体归属计(16 项):
 
-- **✅ 整体自动核验:1 项**(项 4 勾选联动)。
-- **混合(自动部分 + 待人工部分):9 项**(项 2、3、5、6、7、10、11、15、16)——每项均给出自动化证据与待人工步骤,自动部分未替人工背书。
+- **✅ 整体自动核验:0 项**(原 1 项:项 4 因 2026-10-15 底栏双口径改动,新增待人工目测半段,转入混合)。
+- **混合(自动部分 + 待人工部分):10 项**(项 2、3、4、5、6、7、10、11、15、16)——每项均给出自动化证据与待人工步骤,自动部分未替人工背书。
 - **⏳ 整体待人工:6 项**(项 1、8、9、12、13、14)。
 
 §11 六条:满足 1(第 2 条)、部分 4(第 1/3/4/5 条)、待人工 1(第 6 条);工程侧唯一缺口是 CI 配置(待补,补入口径见上表第 5 条)。

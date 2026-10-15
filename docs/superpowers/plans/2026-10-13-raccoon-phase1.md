@@ -3550,4 +3550,18 @@ git add -A && git commit -m "docs: README/LICENSE,一期验收完成"
 17. bundleIDComponent「空段非法」行内注释未随迁(终审 M-11);RuleStoreTests removeItem 偶发失败根因(Task 5 Minor:现跨 run 自愈兜底)
 18. 6 组人工 GUI/VoiceOver/真实演练项(docs/superpowers/qa/phase1-qa-checklist.md ⏳ 项)
 
+---
+
+## 合并后修复记录
+
+### 2026-10-15 明细页底栏口径(用户报障)
+
+**现象**:进「系统垃圾/开发工具缓存/应用缓存」任一类,底栏均显示同一数字(用户机为「已选 128 项 · 10.61GB」)。
+
+**根因(非计数错误)**:列表按类别过滤(`DetailListView` 的 `hits`),但底栏计数用全局选择集(`vm.selectedPaths.count`/`selectedBytes`),而工具栏「全选/全不选」又是按类别(`selectAll/selectNone(in:)`)——**底栏与工具栏范围不一致**,进每类数字自然不动。计划原文即如此(本文件 Task 13 代码块),属规格/计划层口径缺口:规格 §7.2.4 只写「底部常驻 已选 N 项 · X GB」,未定义口径。
+
+**裁决(用户选定「双口径」)**:主数字改本类口径(与工具栏同范围),其下副行显示全局口径——「清理」始终作用于全部已选,跨类默认选中是常态,不告知会让用户误以为只清理本类;两口径相等(仅本类有选中)时不重复展示。
+
+**落地**:`ScanViewModel.selectedItems(in:)/selectedCount(in:)/selectedBytes(in:)`(本类,新增);`DetailListView.bottomBar` 主/副两行;L10n 新增 `detail.selectedAll`(60 键 1:1);测试 `selectedScope_perCategoryAndGlobal`(AppCore 9→10,总 76 绿)。QA 清单项 4 由「整体自动核验」改「混合」(新增目测半段),统计同步 0/10/6。分支 `fix/detail-footer-scope`。
+
 

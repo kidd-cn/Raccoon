@@ -39,8 +39,18 @@ struct DetailListView: View {
 
     var bottomBar: some View {
         HStack {
-            Text(loc("detail.selected", vm.selectedPaths.count, byteText(vm.selectedBytes)))
-                .monospacedDigit()
+            VStack(alignment: .leading, spacing: 2) {
+                // 主数字 = 本类口径,与工具栏「全选/全不选」同范围
+                Text(loc("detail.selected", vm.selectedCount(in: category),
+                         byteText(vm.selectedBytes(in: category))))
+                    .monospacedDigit()
+                // 副行 = 全局口径:「清理」始终作用于全部已选,跨类是默认选中态的常态,
+                // 不告知会让用户以为只清理本类;两者相等(仅本类有选中)时不重复同一个数字
+                if vm.selectedPaths.count != vm.selectedCount(in: category) {
+                    Text(loc("detail.selectedAll", vm.selectedPaths.count, byteText(vm.selectedBytes)))
+                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                }
+            }
             Spacer()
             Button(loc("common.clean")) { vm.confirmPresented = true }
                 .buttonStyle(.borderedProminent)

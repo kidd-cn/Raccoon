@@ -135,6 +135,42 @@ final class ScanViewModelTests {
         await vm.task?.value
         #expect(vm.categoryInFocus == nil)
     }
+
+    // 用户报障:明细页底栏原用全局口径,进每类数字相同(128 项 · 10.61GB)且与工具栏
+    // 「全选/全不选」(按类)范围不一致。本类口径须自成一档,全局口径仍服务清理动作。
+    @Test func selectedScope_perCategoryAndGlobal() async {
+        let vm = makeVM(service: FakeScanService(result: .init(
+            hits: [hit("/a", 10, category: .system),
+                   hit("/b", 20, category: .dev),
+                   hit("/c", 30, category: .dev)],
+            summaries: [], permissionSkippedCount: 0, truncatedRuleIDs: [], excludedCount: 0)),
+            trash: MockTrash(outcome: .trashed))
+        vm.startScan()
+        await vm.task?.value
+
+        // 全局口径:三项皆 safe,默认全选(清理按钮作用范围)
+        #expect(vm.selectedItems.count == 3)
+        #expect(vm.selectedBytes == 60)
+        // 本类口径:与工具栏 selectAll/selectNone(in:) 同范围(底栏主数字)
+        #expect(vm.selectedCount(in: .system) == 1)
+        #expect(vm.selectedBytes(in: .system) == 10)
+        #expect(vm.selectedCount(in: .dev) == 2)
+        #expect(vm.selectedBytes(in: .dev) == 50)
+        #expect(vm.selectedCount(in: .cautious) == 0)
+        #expect(vm.selectedBytes(in: .cautious) == 0)
+
+        // 本类全不选只影响本类,全局随之减少
+        vm.selectNone(in: .dev)
+        #expect(vm.selectedCount(in: .dev) == 0)
+        #expect(vm.selectedCount(in: .system) == 1)
+        #expect(vm.selectedBytes == 10)
+
+        // 本类口径随单项 toggle 同步
+        vm.toggle("/b")
+        #expect(vm.selectedCount(in: .dev) == 1)
+        #expect(vm.selectedBytes(in: .dev) == 20)
+        #expect(vm.selectedBytes == 30)
+    }
 }
 
 struct FailingScanService: ScanServicing {

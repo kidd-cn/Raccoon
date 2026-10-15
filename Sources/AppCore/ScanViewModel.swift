@@ -78,6 +78,17 @@ public final class ScanViewModel {
     public var selectedItems: [ScanHit] { hits.filter { selectedPaths.contains($0.path) } }
     public var selectedBytes: Int64 { selectedItems.reduce(Int64(0)) { $0 + $1.sizeBytes } }
 
+    // 本类口径:与工具栏 selectAll/selectNone(in:) 同范围,供明细页底栏主数字。
+    // 全局口径(上方 selectedItems/selectedBytes)服务清理动作——清理始终作用于全部已选,
+    // 两口径在底栏并列展示,勿互相替代(否则底栏与工具栏范围不一致,用户读到的是别类的量)。
+    public func selectedItems(in category: RuleCategory) -> [ScanHit] {
+        selectedItems.filter { $0.category == category }
+    }
+    public func selectedCount(in category: RuleCategory) -> Int { selectedItems(in: category).count }
+    public func selectedBytes(in category: RuleCategory) -> Int64 {
+        selectedItems(in: category).reduce(Int64(0)) { $0 + $1.sizeBytes }
+    }
+
     public func toggle(_ path: String) {
         if selectedPaths.contains(path) { selectedPaths.remove(path) } else { selectedPaths.insert(path) }
     }

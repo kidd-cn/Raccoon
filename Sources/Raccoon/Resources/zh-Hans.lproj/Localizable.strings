@@ -31,6 +31,7 @@
 "detail.selectNone" = "全不选";
 "detail.uncheckCautious" = "取消谨慎项";
 "detail.selected" = "已选 %d 项 · %@";
+"detail.selectedAll" = "全部类别共 %d 项 · %@";
 "detail.appRunning" = "应用运行中";
 "detail.cautious" = "谨慎";
 "detail.snapshot" = "本地快照 %@";

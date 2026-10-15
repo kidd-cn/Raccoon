@@ -31,6 +31,7 @@
 "detail.selectNone" = "Select None";
 "detail.uncheckCautious" = "Uncheck Cautious";
 "detail.selected" = "%d selected · %@";
+"detail.selectedAll" = "All categories: %d selected · %@";
 "detail.appRunning" = "App running";
 "detail.cautious" = "Caution";
 "detail.snapshot" = "Local snapshot %@";
