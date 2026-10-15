@@ -19,7 +19,7 @@ find -L ".build/$CONFIG" -maxdepth 1 -name "*.bundle" -exec cp -R {} "$APP/Conte
 # .app 内启动若 Resources/ 无 bundle 会 fatalError("unable to find bundle named …"),故两处都拷
 find -L ".build/$CONFIG" -maxdepth 1 -name "*.bundle" -exec cp -R {} "$APP/Contents/Resources/" \;
 
-# 占位图标(若已生成;|| true 防 set -e 下条件短路误退脚本)
+# 占位图标(若已生成;缺失不碍组装)
 if [ -f "build/AppIcon.png" ]; then cp "build/AppIcon.png" "$APP/Contents/Resources/AppIcon.png"; fi
 
 # 本机新版 codesign 不再自动深签未签名的嵌套 bundle,须先内后外逐层 adhoc 签名

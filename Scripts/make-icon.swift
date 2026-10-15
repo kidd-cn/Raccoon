@@ -7,7 +7,8 @@ let image = NSImage(size: NSSize(width: size, height: size))
 image.lockFocus()
 NSColor.systemBlue.setFill()
 NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: size, height: size), xRadius: 180, yRadius: 180).fill()
-let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 620)]
+let para = NSMutableParagraphStyle(); para.alignment = .center
+let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 620), .paragraphStyle: para]
 NSAttributedString(string: "🦝", attributes: attrs)
     .draw(in: NSRect(x: 0, y: (size - 620) / 2 - 30, width: size, height: 700))
 image.unlockFocus()
