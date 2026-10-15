@@ -3344,6 +3344,8 @@ Expected: 排除页可添加/删除路径;添加一个路径(如某个缓存目�
 git add -A && git commit -m "feat(Raccoon): 设置页(排除清单管理 + 关于)"
 ```
 
+> **执行记录(Task 15,已关闭)** 实现(5f5384c,与计划逐字节一致,零偏差)+ 规格审查 ✅(字节级比对)+ 质量审查 Approved(零 Important)。可选小项已顺手落(ba1c778):SettingsView 本体 `@Bindable`→`let`(绑定需求在子 pane)、addPath() 补 NSOpenPanel-vs-fileImporter 取舍注释。**M-1( trash 图标按钮无 accessibilityLabel,修时需配对新增 `settings.remove` 键)顺延 Task 17**(与 Task 13 a11y 同轨)。质量审查增补 Task 17 QA 验证项:「排除 `/`(或主目录)后应可经界面自行删除恢复;排除后扫描结果为空属安全方向行为」。无头活性验证改用直接启动 .build/debug/Raccoon + kill -0 探活(swift run 后台竞态,等价达成)。
+
 ---
 
 ### Task 16: .app 组装脚本 + Info.plist + 占位图标
