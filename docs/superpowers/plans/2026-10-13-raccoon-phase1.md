@@ -2970,6 +2970,11 @@ Expected: 点「开始扫描」→ 进度页数字跳动 → 完成后出现类�
 git add -A && git commit -m "feat(Raccoon): 清理主页四状态 + 类别卡片(cautious 橙色标识)"
 ```
 
+> **Task 12 实现与质量记录(控制器追认):**
+> - 实现 b625f15:零偏差,`@Bindable` 本 SDK 为普通 propertyWrapper **无需手写展开**(与 @State 的宏门控不同,Task 15 直接可用);`navigationDestination(item: $vm.categoryInFocus)` 原文编译通过。构建零错误、启动存活、74/74 绿。spec 审查 ✅ 零实质偏差。
+> - 质量轮 Fix-first 1 Important + 3 Minor,裁决:Important 修 + 钉测试;Minor 2/3 修;Minor 1(failedView .yellow→.orange)**驳回**——黄=失败警示与橙=谨慎清理系两个语义轴,规格原文即黄。修复 b92c75f(75/75 绿):startScan/dismissReport 复位 `categoryInFocus`(navigationDestination(item:) 对 hosting view 因 phase 切换离开层级时的写回无契约保证,残留非 nil 会在下次完成态自动推入旧明细页)、新增 `startScan_resetsCategoryInFocus` 钉测试、导航契约注释(给 Task 13 作者)、删冗余 @ViewBuilder。复审 Approved。
+> - **Task 13 作者注意:**DetailListView 依赖的双保险复位已在 ScanViewModel 就位;明细页在栈上时若 phase 切换,completedView(含 navigationDestination 修饰符)离开层级属预期弹栈路径。
+
 ---
 
 ### Task 13: 明细列表页
