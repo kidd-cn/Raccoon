@@ -48,6 +48,19 @@ public struct CategorySummary: Identifiable, Equatable, Sendable {
         self.totalBytes = totalBytes
         self.hitCount = hitCount
     }
+
+    /// 按类别聚合:字节为类别内合计,命中数为条数,空类别不出现在结果中。
+    /// 扫描收尾(ScanEngine)与清理后重算(ScanViewModel)共用本实现——同一口径两处各写一份,
+    /// 改一处必漏另一处;须假定入参已按 path 去重(去重属扫描管线职责)。
+    public static func aggregate(_ hits: [ScanHit]) -> [CategorySummary] {
+        let byCategory = Dictionary(grouping: hits, by: \.category)
+        return RuleCategory.allCases.compactMap { category in
+            guard let list = byCategory[category] else { return nil }
+            return CategorySummary(category: category,
+                                   totalBytes: list.reduce(Int64(0)) { $0 + $1.sizeBytes },
+                                   hitCount: list.count)
+        }
+    }
 }
 
 public struct ScanProgress: Equatable, Sendable {

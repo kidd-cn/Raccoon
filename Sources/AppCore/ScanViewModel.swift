@@ -111,6 +111,10 @@ public final class ScanViewModel {
         guard !items.isEmpty else { return }
         phase = .cleaning
         confirmPresented = false
+        // 明细页即刻让位(item 导航由绑定驱动,不复位则明细页一直留在栈上,清理完成后
+        // 用户仍盯着旧列表——所见正是已进废纸篓的条目与旧字节数):用户报障「执行清理后
+        // 状态不更新」。与 startScan/dismissReport 同源复位,见 CleanupHomeView 导航契约注释。
+        categoryInFocus = nil
         // 清理时重建保护层(取此刻最新排除清单)——与扫描时的实例有意分离,两处语义须一致
         let protection = ProtectionStore(userExclusions: exclusions.exclusions)
         let executor = CleanExecutor(trash: trash, protection: protection)
@@ -122,8 +126,25 @@ public final class ScanViewModel {
                 Logger(subsystem: "com.raccooncleaner.Raccoon", category: "history")
                     .error("history append failed: \(String(describing: error))")
             }
-            self?.phase = .report(report)
+            self?.applyCleanOutcome(report, submittedPaths: items.map(\.path))
         }
+    }
+
+    /// 清理后置:让 in-memory 状态与磁盘事实一致。
+    /// 每个提交项的结果恰为「入废纸篓 / 已被应用删除 / 快照已清 / 被跳过」四者之一,
+    /// 故「提交过且未进 skipped」即已不在磁盘上,须同时离开 hits、类别汇总与选择集——
+    /// 否则明细页仍列出刚清理的文件、底栏仍报旧字节(用户报障:清理后状态不更新)。
+    /// 反向同理:skipped 项(受保护、无权限、快照失败)仍在磁盘上,必须留在列表里可再次处理。
+    private func applyCleanOutcome(_ report: CleanReport, submittedPaths: [String]) {
+        let gone = Set(submittedPaths).subtracting(report.skipped.map(\.path))
+        if !gone.isEmpty {
+            hits.removeAll { gone.contains($0.path) }
+            // selectedPaths 只做差集,不重建:勾选状态属用户意志,清理不该顺手改它
+            selectedPaths.subtract(gone)
+            summaries = CategorySummary.aggregate(hits)
+        }
+        loadLastCleanup()   // 主页「上次清理释放 X」即刻反映本次结果,不必等重启
+        phase = .report(report)
     }
 
     public func loadLastCleanup() {

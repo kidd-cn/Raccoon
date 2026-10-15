@@ -3564,4 +3564,19 @@ git add -A && git commit -m "docs: README/LICENSE,一期验收完成"
 
 **落地**:`ScanViewModel.selectedItems(in:)/selectedCount(in:)/selectedBytes(in:)`(本类,新增);`DetailListView.bottomBar` 主/副两行;L10n 新增 `detail.selectedAll`(60 键 1:1);测试 `selectedScope_perCategoryAndGlobal`(AppCore 9→10,总 76 绿)。QA 清单项 4 由「整体自动核验」改「混合」(新增目测半段),统计同步 0/10/6。分支 `fix/detail-footer-scope`。
 
+### 2026-10-15 清理后状态不收敛(用户报障,同上分支)
+
+**现象**:「执行清理后,状态信息为没有更新,也就是所清理的文件目录没有更新,已选项中数据大小也没有更新」——明细页仍列出刚清理的条目,底栏仍报清理前的字节数。
+
+**根因(三条,同一处遗漏的「清理后置」)**:
+1. `cleanSelected()` 进 `.cleaning` 时**不复位 `categoryInFocus`**。`navigationDestination(item:)` 由绑定驱动而非栈驱动,残留非 nil 即明细页继续呈现——所以用户压根没看到进度与报告页,盯着的是旧列表(与 Task 12 给 `startScan`/`dismissReport` 加复位是同一问题,清理路径漏掉)。附带后果:`.report` 态下明细页的「清理…」按钮仍可点,守住 `phase == .completed` 的守卫使其点了毫无反应,弹窗亦不关闭。
+2. 清理完成后 `hits`/`selectedPaths`/`summaries` **不随废纸篓事实收敛**,故列表与底栏数字均停在清理前。
+3. `lastCleanup` 不刷新,主页「上次清理释放 X」须重启应用才更新。
+
+**裁决**:三条全修(用户报障的两条现象 + 同族的状态陈旧)。收敛口径:每个提交项的结果恰为「入废纸篓 / 已被应用删除 / 快照已清 / 被跳过」四者之一,故 `已清理 = 提交路径 − report.skipped 路径`;`skipped` 项(受保护、无权限、快照失败)仍在磁盘上,**必须留在列表与选择集**里可再次处理,不可一并清空。
+
+**落地**:`ScanViewModel.applyCleanOutcome(_:submittedPaths:)`(新增,私有:差集收敛 + 重算 summaries + `loadLastCleanup()` + 置 `.report`);`cleanSelected()` 补 `categoryInFocus = nil`;`CategorySummary.aggregate(_:)`(`ScanKit/ScanModels.swift` 新增,`ScanEngine` 收尾改为共用,避免同一聚合口径两处各写一份);`MockTrash` 增 `skippedFor`(混合结果轮用)。测试 +3:`cleanSelected_convergesStateAndYieldsDetailPage`、`cleanSelected_keepsSkippedItemsInListAndSelection`、`cleanSelected_prunesOnlyCleanedSubset`(AppCore 10→13,总 **79 绿**)。反向自检:撤掉修复后三测全红、红点即用户报障的两个现象(10 断言),再恢复即全绿。
+
+**已知取舍**:报告页只提供「再扫一次」(→ `dismissReport` → idle → 全量重扫),清理后没有「返回列表」路径,故收敛后的 `hits`/`summaries` 当前仅供状态一致性与后续改动(若二期在报告页加「返回结果」,无需再补此收敛)。主页「上次清理释放 X」的刷新依赖 `loadLastCleanup()`,现已纳入清理后置。
+
 

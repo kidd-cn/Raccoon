@@ -2,7 +2,7 @@
 
 > **诚实性声明**:本文档生成于无 GUI 自动化环境(实现子代理,CLT 6.4 / macOS 27.0 SDK)。本环境无法进行人工目测与 GUI 交互,故每项明确标注「✅ 自动核验」「⏳ 待人工」或混合拆分,**绝无将待人工项标成已验**。
 >
-> - **✅ 自动核验**:证据为测试名(`Tests/` 文件:行)或代码落位;全部 76 用例经 `Scripts/test.sh` 于本仓库全绿(40+26+10)。
+> - **✅ 自动核验**:证据为测试名(`Tests/` 文件:行)或代码落位;全部 79 用例经 `Scripts/test.sh` 于本仓库全绿(40+26+13)。
 > - **⏳ 待人工**:需 GUI 交互或人眼判断,附操作步骤。
 
 ## 一、计划原生 12 项
@@ -27,12 +27,13 @@
 
 - ✅ 自动核验:本类口径与全局口径分档 `selectedScope_perCategoryAndGlobal`(`Tests/AppCoreTests/ScanViewModelTests.swift:139-176`:本类计数/字节随 `selectNone(in:)/toggle` 同步,全局随之减少);勾选路径 `toggle/selectAll/selectNone/uncheckCautiousAndRunning` 在 `ScanViewModel.swift:81-95`;底栏绑定 `vm.selectedCount(in:)/selectedBytes(in:)`(主)与 `selectedItems/selectedBytes`(副,仅两者不等时显示)——`Sources/Raccoon/DetailListView.swift` 内 `bottomBar`。
 - ⏳ 待人工:目测底栏。「本类已选 N 项」应随进入的类别变化;含跨类选中时其下应有副行「全部类别共 M 项」,副行数字即「清理」按钮的作用范围;仅本类有选中时副行不显示。步骤:扫描 → 进「系统垃圾」记下数字 → 返回进「开发工具缓存」数字应不同。
-- 结果:数值联动逻辑全绿(76 用例);L10n `detail.selected`/`detail.selectedAll` 双语齐备(60 键 1:1)。**2026-10-15 用户报障修复**:原底栏仅用全局口径,进每类数字相同(128 项 · 10.61 GB)且与按类的工具栏范围不一致 → 改为双口径并列。
+- 结果:数值联动逻辑全绿(79 用例);L10n `detail.selected`/`detail.selectedAll` 双语齐备(60 键 1:1)。**2026-10-15 用户报障修复**:原底栏仅用全局口径,进每类数字相同(128 项 · 10.61 GB)且与按类的工具栏范围不一致 → 改为双口径并列。
 
 ### 5. 清理后报告数字与废纸篓项目数一致;放回文件可恢复 — 混合(自动 + 待人工)
 
 - ✅ 自动核验:报告聚合 `testClean_aggregatesReport_andSkipsProtected`、`testClean_progressReportsEachItem`(`Tests/CleanKitTests/CleanExecutorTests.swift`);VM 级 `testCleanSelected_reportsWritesHistory_andDismiss`(`ScanViewModelTests.swift:65-90`,断言 `report.trashedCount == 1` 且 MockTrash 收到的调用恰为勾选项);真实 `FileManager.trashItem` 生效 `testFileManagerTrashService_trashesTempFile`(`Tests/CleanKitTests/TrashServiceTests.swift:21-27`,真实将临时文件移入废纸篓并断言原路径消失)。
 - ⏳ 待人工:从废纸篓「放回」验证可恢复。步骤:清理若干文件 → 打开废纸篓 → 记数与报告「N 项已移入废纸篓」一致 → 右键一个文件「放回原位置」→ 确认文件回到原路径且应用可用。
+- 补充(2026-10-15 用户报障修复):清理后置收敛 `cleanSelected_convergesStateAndYieldsDetailPage` / `cleanSelected_keepsSkippedItemsInListAndSelection` / `cleanSelected_prunesOnlyCleanedSubset`(`Tests/AppCoreTests/ScanViewModelTests.swift`):清理后明细页让位、报告页可见,已清理条目离开列表与选择集,`skipped` 项留在列表;主页「上次清理释放 X」即时更新。⏳ 待人工:清理完成后应看到进度→报告页(而非停在旧明细列表),返回 idle 后主页释放量为本次值。
 
 ### 6. 设置页添加排除路径 → 重扫 → 该路径不出现 — 混合(自动 + 待人工)
 
@@ -59,6 +60,7 @@
 
 - ✅ 自动核验:存储路径 `~/Library/Application Support/Raccoon/history.json`(`Sources/CleanKit/CleanReport.swift:28,42`);读写 roundtrip `append_and_loadAll_roundtrip`、损坏恢复 `append_preservesCorruptFileAside_andRecovers`(`Tests/CleanKitTests/HistoryStoreTests.swift`);VM 级闭环 `testCleanSelected_reportsWritesHistory_andDismiss`(`ScanViewModelTests.swift:80-84`,清理后 `loadLastCleanup()` 断言 `freedBytes == 100`)。
 - ⏳ 待人工:真机文件与主页回显。**当前状态(2026-10-15)**:目录已存在但 `history.json` 尚未生成(本机尚未执行过真实清理)。步骤:完成一次真实清理 → 确认 `history.json` 生成且含本次记录 → 主页显示「上次清理释放 X」。
+- 补充(2026-10-15 用户报障修复):清理后置已自动 `loadLastCleanup()`(`ScanViewModel.applyCleanOutcome`),主页值不再依赖重启;测试 `cleanSelected_convergesStateAndYieldsDetailPage` 断言清理后 `lastCleanup?.freedBytes` 即本次值。⏳ 待人工:清理后不重启应用,返回 idle 应看到本次释放量。
 
 ### 11. 微信等容器路径:结果只出现 …/Caches 子目录,绝无聊天记录目录 — 混合(自动 + 待人工)
 
@@ -80,6 +82,7 @@
 
 - 步骤:`swift run` → 开始扫描 → 四类卡片 → 点开一类别明细 → 全选/部分勾选(注意 cautious 单独分区与运行中黄色警告出现在确认弹窗)→ 底部「清理…」→ 确认弹窗核对总大小/项数、cautious 分区、运行中提示 → 点「移入废纸篓」(默认键应为取消/非破坏键,Task 14 I-1 修复)→ 报告页核对释放量/N 项/M 跳过 → 「再扫一次」回 idle → 打开废纸篓确认项目存在并放回一个文件。
 - 关联 Task 14 已知缓议(非阻塞):M-2 全跳过时报告图标条件化、M-5 报告页关闭按钮,见计划文档执行记录。
+- 补充(2026-10-15 用户报障修复):点「移入废纸篓」后明细页应**立即让位**(进度→报告页),不得停留在旧明细列表。原缺陷:`cleanSelected` 未复位 `categoryInFocus`,item 导航由绑定驱动故明细页一直留在栈上,用户看到的是已进废纸篓的条目与旧「已选」字节(用户报障原文:执行清理后状态信息没有更新)。回归测试 `cleanSelected_convergesStateAndYieldsDetailPage`(`Tests/AppCoreTests/ScanViewModelTests.swift`)。
 
 ### 15. 排除 `/`(或主目录)后扫描结果为空属安全方向行为,且可经设置页自行删除恢复(Task 15 质量审查增补)— 混合(自动 + 待人工)
 
@@ -97,11 +100,11 @@
 
 | # | Done 定义 | 结论 | 证据与缺口 |
 | - | --------- | ---- | ---------- |
-| 1 | 四类规则扫描全流程可用,非开发目录亦能安全运行 | **部分** | 自动面:内置 27 条规则四类全覆盖、零拒绝零告警(`bundledRulesLoadClean`、`bundledRulesCoverAllCategoriesAndHaveLocalizedDescriptions`、`bundledRulesKeyRulesPresent`);非开发目录规则根缺失→空态(`defaultMode_missingRootYieldsEmpty`),76/76 绿。缺口:真机 GUI 全流程目测待人工(清单项 1/14)。 |
+| 1 | 四类规则扫描全流程可用,非开发目录亦能安全运行 | **部分** | 自动面:内置 27 条规则四类全覆盖、零拒绝零告警(`bundledRulesLoadClean`、`bundledRulesCoverAllCategoriesAndHaveLocalizedDescriptions`、`bundledRulesKeyRulesPresent`);非开发目录规则根缺失→空态(`defaultMode_missingRootYieldsEmpty`),79/79 绿。缺口:真机 GUI 全流程目测待人工(清单项 1/14)。 |
 | 2 | 全部安全机制生效,恶意规则回归测试通过 | **满足** | 恶意规则回归:`testLoad_securityRegression_ruleAtProtectedPathRejected`、`testLoad_symlinkAliasToProtectedRejected`、`testLoad_symlinkEscapingHomeRejected`、`testI2_applicationsWildcardIncludeRejected`、`testSecurityRegression_rulePointingAtProtectedRootIsConflict`(RuleStoreTests)、`testClean_securityRegression_neverTrashesProtectedEvenIfInjected`(CleanExecutorTests,注入勾选后删除前仍拦截)、`testCleanSelected_skipsProtectedAtExecutorLevel`(ScanViewModelTests:92-107)、`testM1_rootPathConflictsWithEverything`、`testComponentPrefixMatch_notStringPrefix`、`testDefaultHardRoots_coverUserContentAndLibraryKeys`、`testC1_caseInsensitiveProtection`(ProtectionStoreTests)。四道门各有测试锚点;RuleStore 校验逻辑见 `Sources/ScanKit/RuleStore.swift:55-75`。 |
 | 3 | 清理仅产生废纸篓入项,可恢复 | **部分** | 自动面:删除动作唯一实现 `FileManager.trashItem`(`Sources/CleanKit/TrashService.swift`,无 unlink 路径);`testFileManagerTrashService_trashesTempFile` 真实移入废纸篓;报告计数与勾选一致(`testCleanSelected_reportsWritesHistory_andDismiss`)。缺口:「放回恢复」为系统废纸篓固有行为,本项目侧的实证属 GUI 人工(清单项 5/14)。 |
 | 4 | 中英文、浅色深色完整适配 | **部分** | 自动面:en/zh 两份 Localizable.strings 各 60 键 1:1(`settings.remove` 与 `detail.selectedAll`);全部用户可见文案经 `loc()` 消费;`bundledRulesCoverAllCategoriesAndHaveLocalizedDescriptions` 保证规则描述双语;UI 纯系统控件+语义色,无硬编码颜色。缺口:语言切换与深浅色实际观感属人眼(清单项 8/9)。 |
-| 5 | ScanKit/CleanKit 单测覆盖核心路径,CI(macOS runner)绿 | **部分** | 单测:76 用例全绿(本机 `Scripts/test.sh`:CleanKit 40 + ScanKit 26 + AppCore 10,Swift Testing @Test 共 76)。**CI 如实说明:本仓库尚无 CI 配置(无 `.github/` 目录),「CI 绿」待补**。补入口径:GitHub Actions `macos-latest` runner,步骤 `swift build && Scripts/test.sh`,以 76 全绿为门槛。 |
+| 5 | ScanKit/CleanKit 单测覆盖核心路径,CI(macOS runner)绿 | **部分** | 单测:79 用例全绿(本机 `Scripts/test.sh`:CleanKit 40 + ScanKit 26 + AppCore 13,Swift Testing @Test 共 79)。**CI 如实说明:本仓库尚无 CI 配置(无 `.github/` 目录),「CI 绿」待补**。补入口径:GitHub Actions `macos-latest` runner,步骤 `swift build && Scripts/test.sh`,以 79 全绿为门槛。 |
 | 6 | 在本机完成一次真实扫描+清理演练,人工核对结果无误 | **待人工** | 天然人工项,对应清单项 14 的完整演练;本环境无 GUI 人工执行能力。前期已完成的无头替代:Task 16 .app 组装 + 8 秒活性探活、Task 15 直接启动探活(见计划文档执行记录),但不构成人工核对。 |
 
 ## 统计

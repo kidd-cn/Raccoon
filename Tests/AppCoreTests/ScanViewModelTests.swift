@@ -171,6 +171,73 @@ final class ScanViewModelTests {
         #expect(vm.selectedBytes(in: .dev) == 20)
         #expect(vm.selectedBytes == 30)
     }
+
+    // 用户报障:执行清理后状态不更新——「所清理的文件目录没有更新,已选项中数据大小也没有更新」。
+    // 两条根因:1) categoryInFocus 未复位 → item 导航由绑定驱动,明细页留在栈上(报告页根本不可见);
+    // 2) hits/selectedPaths/summaries 未随废纸篓事实收敛 → 列表仍列已清理条目、底栏仍报旧字节。
+    @Test func cleanSelected_convergesStateAndYieldsDetailPage() async {
+        let vm = makeVM(service: FakeScanService(result: .init(
+            hits: [hit("/a", 10), hit("/b", 20, category: .dev)],
+            summaries: [.init(category: .system, totalBytes: 10, hitCount: 1),
+                        .init(category: .dev, totalBytes: 20, hitCount: 1)],
+            permissionSkippedCount: 0, truncatedRuleIDs: [], excludedCount: 0)),
+            trash: MockTrash(outcome: .trashed))
+        vm.startScan()
+        await vm.task?.value
+        vm.categoryInFocus = .system        // 清理只能从明细页发起,故此处置非 nil
+        #expect(vm.selectedBytes == 30)
+
+        vm.cleanSelected()
+        #expect(vm.categoryInFocus == nil)  // 明细页即刻让位:用户看到 .cleaning/.report,而非旧列表
+        await vm.cleanTask?.value
+
+        guard case .report = vm.phase else { Issue.record("应为 report"); return }
+        #expect(vm.hits.isEmpty)            // 已进废纸篓的条目不再出现在列表
+        #expect(vm.selectedPaths.isEmpty)
+        #expect(vm.selectedBytes == 0)      // 底栏数字随事实归零
+        #expect(vm.summaries.isEmpty)
+        #expect(vm.lastCleanup?.freedBytes == 30)   // 主页「上次清理释放 X」即刻更新,不必等重启
+    }
+
+    // 反向钉死:被跳过的项仍在磁盘上,绝不能一并从列表/选择集/汇总里消失
+    @Test func cleanSelected_keepsSkippedItemsInListAndSelection() async {
+        let vm = makeVM(service: FakeScanService(result: .init(
+            hits: [hit("/a", 10)],
+            summaries: [.init(category: .system, totalBytes: 10, hitCount: 1)],
+            permissionSkippedCount: 0, truncatedRuleIDs: [], excludedCount: 0)),
+            trash: MockTrash(outcome: .skipped(reason: "no-permission")))
+        vm.startScan()
+        await vm.task?.value
+        vm.cleanSelected()
+        await vm.cleanTask?.value
+
+        #expect(vm.hits.map(\.path) == ["/a"])
+        #expect(vm.selectedPaths == ["/a"])
+        #expect(vm.selectedBytes == 10)
+        #expect(vm.summaries == [.init(category: .system, totalBytes: 10, hitCount: 1)])
+    }
+
+    // 混合轮:只收敛被清理的那部分。「整体清空」能蒙过上面两测,本测将其钉死
+    @Test func cleanSelected_prunesOnlyCleanedSubset() async {
+        let vm = makeVM(service: FakeScanService(result: .init(
+            hits: [hit("/a", 10), hit("/b", 20, category: .dev)],
+            summaries: [.init(category: .system, totalBytes: 10, hitCount: 1),
+                        .init(category: .dev, totalBytes: 20, hitCount: 1)],
+            permissionSkippedCount: 0, truncatedRuleIDs: [], excludedCount: 0)),
+            trash: MockTrash(outcome: .trashed, skippedFor: ["/b"]))
+        vm.startScan()
+        await vm.task?.value
+        vm.cleanSelected()
+        await vm.cleanTask?.value
+
+        guard case .report(let report) = vm.phase else { Issue.record("应为 report"); return }
+        #expect(report.trashedCount == 1)
+        #expect(report.skipped.map(\.path) == ["/b"])
+        #expect(vm.hits.map(\.path) == ["/b"])     // 被跳过者留在列表,已清理者收敛
+        #expect(vm.selectedPaths == ["/b"])
+        #expect(vm.selectedBytes == 20)
+        #expect(vm.summaries == [.init(category: .dev, totalBytes: 20, hitCount: 1)])
+    }
 }
 
 struct FailingScanService: ScanServicing {

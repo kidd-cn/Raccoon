@@ -35,7 +35,7 @@ macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 
 
 ```bash
 swift build            # 构建
-Scripts/test.sh        # 全量测试(76 用例)——唯一合法测试入口,勿直接 swift test
+Scripts/test.sh        # 全量测试(79 用例)——唯一合法测试入口,勿直接 swift test
 swift run              # 运行应用(开发模式)
 Scripts/bundle-app.sh  # 组装 Raccoon.app(adhoc 签名,输出到 build/)
 ```

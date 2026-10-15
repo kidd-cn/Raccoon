@@ -72,13 +72,7 @@ public struct ScanEngine: Sendable {
         // 聚合按 path 去重:规则根嵌套时同一 item 可能被多条规则命中
         var seen = Set<String>()
         let deduped = hits.filter { seen.insert($0.path).inserted }
-        let byCat = Dictionary(grouping: deduped, by: \.category)
-        let summaries = RuleCategory.allCases.compactMap { cat -> CategorySummary? in
-            guard let list = byCat[cat] else { return nil }
-            return CategorySummary(category: cat,
-                                   totalBytes: list.reduce(Int64(0)) { $0 + $1.sizeBytes },
-                                   hitCount: list.count)
-        }
+        let summaries = CategorySummary.aggregate(deduped)
         let truncated = Set(zip(rules, outcomes).compactMap { rule, outcome -> String? in
             guard let outcome, outcome.truncated else { return nil }
             return rule.id
