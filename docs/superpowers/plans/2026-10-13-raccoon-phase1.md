@@ -3579,4 +3579,6 @@ git add -A && git commit -m "docs: README/LICENSE,一期验收完成"
 
 **已知取舍**:报告页只提供「再扫一次」(→ `dismissReport` → idle → 全量重扫),清理后没有「返回列表」路径,故收敛后的 `hits`/`summaries` 当前仅供状态一致性与后续改动(若二期在报告页加「返回结果」,无需再补此收敛)。主页「上次清理释放 X」的刷新依赖 `loadLastCleanup()`,现已纳入清理后置。
 
+**合并**:以上两笔(0208ccf 底栏双口径、0f18cf7 清理后置收敛)经用户指示「合并」于 2026-10-15 快进合入 `main`,合并结果上重跑 `Scripts/test.sh` 仍 79/79 绿,分支 `fix/detail-footer-scope` 已删除。
+
 
