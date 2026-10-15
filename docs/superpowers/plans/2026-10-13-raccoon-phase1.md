@@ -3581,4 +3581,14 @@ git add -A && git commit -m "docs: README/LICENSE,一期验收完成"
 
 **合并**:以上两笔(0208ccf 底栏双口径、0f18cf7 清理后置收敛)经用户指示「合并」于 2026-10-15 快进合入 `main`,合并结果上重跑 `Scripts/test.sh` 仍 79/79 绿,分支 `fix/detail-footer-scope` 已删除。
 
+### 2026-10-15 部分清理后继续处理剩余项(用户要求)
+
+**现象/要求**:「部分选择后清理,应该保留未清理项,同时删除已清理项」。收敛语义(`已清理 = 提交路径 − skipped 路径`、差集而非清空)上一轮已落并有三测钉住,**缺的是可达路径**:报告页只有「再扫一次」(`dismissReport` → 全量重置 → 重扫),收敛后的 `hits` 在 UI 上没有任何入口,剩余项等于被丢弃——用户只能靠重扫重新发现它们,而这与上一轮记的「已知取舍」正是同一件事,现按用户要求补齐。
+
+**裁决**:报告页保留(规格 §7.2.7 的完成报告不可省),新增返回入口而非改动清理后落点。有剩余项时「返回列表」为主按钮(`returnToResults()` → `.completed`,保留 hits/summaries/选择集),「再扫一次」降为次按钮;全部清完(`hits.isEmpty`)时只留「再扫一次」,避免进到空结果页。剩余项在报告页显式告知(「还有 N 项 · X 未清理」),否则用户无从判断是「清完了」还是「还剩着」。
+
+**落地**:`ScanViewModel.returnToResults()`(新增,仅报告态可达)、`remainingBytes`(新增);`ReportView` 增剩余行与返回按钮;L10n +2 `report.remaining`/`report.backToList`(62 键 1:1);测试 +2 `cleanSelected_partialSelectionKeepsRemainingAndReturnsToList`、`returnToResults_guardedOutsideReport`(AppCore 13→15,总 **81 绿**)。README 清理流、QA 清单项 5/14 同步。分支 `feat/partial-clean-continue`。
+
+**取舍**:返回列表不重扫,结果可能随磁盘变化略旧(仅剩未清理/被跳过项,均未被本次清理触碰);若用户想刷新,「再扫一次」仍在其旁。返回时**不**重新套用默认勾选(safe && !running),保留用户自己的勾选意志——已清理项从选择集移除,其余原样。
+
 

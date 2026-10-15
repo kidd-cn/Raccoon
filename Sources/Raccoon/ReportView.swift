@@ -38,12 +38,21 @@ struct ReportView: View {
                 }
                 .frame(maxWidth: 420)
             }
+            // 部分清理后剩余项仍在结果里,必须说出来:否则用户只能靠「再扫一次」重新发现它们
+            if !vm.hits.isEmpty {
+                Text(loc("report.remaining", vm.hits.count, byteText(vm.remainingBytes)))
+                    .monospacedDigit().foregroundStyle(.secondary)
+            }
             HStack {
-                Button(loc("report.again")) {
-                    vm.dismissReport()
-                    vm.startScan()
+                // 还有剩余项时回列表是主路径(不必重扫即可接着清);全部清完时只剩再扫一次
+                if vm.hits.isEmpty {
+                    Button(loc("report.again")) { vm.dismissReport(); vm.startScan() }
+                        .buttonStyle(.borderedProminent)
+                } else {
+                    Button(loc("report.backToList")) { vm.returnToResults() }
+                        .buttonStyle(.borderedProminent)
+                    Button(loc("report.again")) { vm.dismissReport(); vm.startScan() }
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
         .padding(30)

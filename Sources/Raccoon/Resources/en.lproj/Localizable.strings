@@ -45,6 +45,8 @@
 "report.vanished" = "%d items were already removed by their apps";
 "report.snapshots" = "%d local snapshots deleted";
 "report.skipped" = "%d items skipped";
+"report.remaining" = "%d items · %@ still to clean";
+"report.backToList" = "Back to List";
 "report.again" = "Scan Again";
 "settings.title" = "Settings";
 "settings.exclusions" = "Exclusions";

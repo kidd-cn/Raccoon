@@ -45,6 +45,8 @@
 "report.vanished" = "%d 项在清理前已被应用自动删除";
 "report.snapshots" = "%d 个本地快照已清理";
 "report.skipped" = "%d 项被跳过";
+"report.remaining" = "还有 %d 项 · %@ 未清理";
+"report.backToList" = "返回列表";
 "report.again" = "再扫一次";
 "settings.title" = "设置";
 "settings.exclusions" = "排除清单";

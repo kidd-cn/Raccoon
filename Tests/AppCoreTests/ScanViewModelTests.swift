@@ -238,6 +238,52 @@ final class ScanViewModelTests {
         #expect(vm.selectedBytes == 20)
         #expect(vm.summaries == [.init(category: .dev, totalBytes: 20, hitCount: 1)])
     }
+
+    // 用户要求:部分选择后清理——保留未清理项、删除已清理项,且**不必重扫**即可继续处理剩余项。
+    // 原缺陷:收敛后的 hits 无任何 UI 路径可达(报告页只有「再扫一次」→ 全量重置),剩余项等于被丢弃。
+    @Test func cleanSelected_partialSelectionKeepsRemainingAndReturnsToList() async {
+        let vm = makeVM(service: FakeScanService(result: .init(
+            hits: [hit("/a", 10), hit("/b", 20, category: .dev), hit("/c", 30, category: .apps)],
+            summaries: [.init(category: .system, totalBytes: 10, hitCount: 1),
+                        .init(category: .dev, totalBytes: 20, hitCount: 1),
+                        .init(category: .apps, totalBytes: 30, hitCount: 1)],
+            permissionSkippedCount: 0, truncatedRuleIDs: [], excludedCount: 0)),
+            trash: MockTrash(outcome: .trashed))
+        vm.startScan()
+        await vm.task?.value
+        vm.toggle("/c")                     // 部分选择:取消 /c
+        #expect(vm.selectedPaths == ["/a", "/b"])
+
+        vm.cleanSelected()
+        await vm.cleanTask?.value
+
+        guard case .report(let report) = vm.phase else { Issue.record("应为 report"); return }
+        #expect(report.trashedCount == 2)
+        #expect(vm.hits.map(\.path) == ["/c"])                      // 未清理项保留
+        #expect(vm.selectedPaths.isEmpty)                           // 已清理项离开选择集
+        #expect(vm.remainingBytes == 30)                            // 报告页据此告知「还有 N 项未清理」
+        #expect(vm.summaries == [.init(category: .apps, totalBytes: 30, hitCount: 1)])
+
+        vm.returnToResults()
+        #expect(vm.phase == .completed)                             // 回列表,不重扫
+        #expect(vm.hits.map(\.path) == ["/c"])                      // 剩余项仍在,可直接接着清
+        #expect(vm.categoryInFocus == nil)
+    }
+
+    // 守卫:仅报告态可回列表(idle/scanning/completed 调用不得改变状态机)
+    @Test func returnToResults_guardedOutsideReport() async {
+        let vm = makeVM(service: FakeScanService(result: .init(
+            hits: [hit("/a", 10)], summaries: [], permissionSkippedCount: 0,
+            truncatedRuleIDs: [], excludedCount: 0)), trash: MockTrash(outcome: .trashed))
+        #expect(vm.phase == .idle)
+        vm.returnToResults()
+        #expect(vm.phase == .idle)
+
+        vm.startScan()
+        await vm.task?.value
+        vm.returnToResults()                // completed 态:明细页已是入口,无需也不应改动
+        #expect(vm.phase == .completed)
+    }
 }
 
 struct FailingScanService: ScanServicing {

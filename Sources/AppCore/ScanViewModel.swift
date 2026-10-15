@@ -77,6 +77,9 @@ public final class ScanViewModel {
 
     public var selectedItems: [ScanHit] { hits.filter { selectedPaths.contains($0.path) } }
     public var selectedBytes: Int64 { selectedItems.reduce(Int64(0)) { $0 + $1.sizeBytes } }
+    /// 清理后仍在列表里的条目合计(未清理 + 被跳过):报告页据此告知「还有 N 项未清理」,
+    /// 与 freedBytes(已清理)相对,两数相加即清理前的全量。
+    public var remainingBytes: Int64 { hits.reduce(Int64(0)) { $0 + $1.sizeBytes } }
 
     // 本类口径:与工具栏 selectAll/selectNone(in:) 同范围,供明细页底栏主数字。
     // 全局口径(上方 selectedItems/selectedBytes)服务清理动作——清理始终作用于全部已选,
@@ -149,6 +152,15 @@ public final class ScanViewModel {
 
     public func loadLastCleanup() {
         lastCleanup = (try? history.loadAll())?.max { $0.date < $1.date }
+    }
+
+    /// 报告态返回结果列表(保留清理后的 hits/summaries/选择集)。
+    /// 部分清理后剩余项仍在 hits 里,不应强迫用户重扫才能接着清;报告页据此提供主入口。
+    /// 仅报告态可达:idle/scanning/completed 下已是或即将是结果列表本身,调用无意义。
+    public func returnToResults() {
+        guard case .report = phase else { return }
+        categoryInFocus = nil      // 防残留(同 startScan/dismissReport/cleanSelected,见 CleanupHomeView 导航契约)
+        phase = .completed
     }
 
     public func dismissReport() {
