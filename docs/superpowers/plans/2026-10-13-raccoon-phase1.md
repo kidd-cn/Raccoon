@@ -3502,6 +3502,8 @@ Expected: 全绿(约 45+ 用例)
 git add -A && git commit -m "docs: README/LICENSE,一期验收完成"
 ```
 
+> **执行记录(Task 17,已关闭;至此 17/17 完成)** 实现 4 提交:883a4e2(a11y 补齐:明细 Toggle `hit.appName ?? hit.path` + 设置 trash 按钮 + settings.remove 键,58→59)、cd735ef(README/LICENSE)、e12ab90(QA/验收清单 `docs/superpowers/qa/phase1-qa-checklist.md`:16 项诚实分离 ✅自动/⏳待人工/混合,§11 六条=满足1/部分4/待人工1,**CI 无配置如实标待补**)、02df1de(质量轮)。规格审查 ✅(反虚构核查通过:README 硬事实逐条对码、路线图与 spec §2 逐行对照;诚实性抽查 7 处证据引用全数命中)。质量审查 Fix-first→修复→复审 Approved:I-1 README「所有删除只进废纸篓」被 tmutil-thin 证伪→措辞诚实化;**M-1 快照行 VoiceOver 读伪 URL→三分支 label 与可见标题同源**;M-2 schema description 标注「否(推荐)」+测试强制注记;M-3 QA 锚点改符号锚点;**协调方追加同批:confirm.cautiousSection 双语文案诚实化**(快照不经废纸篓如实声明,与 I-1 同属删除语义诚实性)。审查者顺带核出的所有删除语义表述现已全链路一致(README/弹窗/VoiceOver/报告 freed 口径)。
+
 ---
 
 ## 计划自审记录
