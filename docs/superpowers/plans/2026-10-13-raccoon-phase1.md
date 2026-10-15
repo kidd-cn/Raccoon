@@ -68,11 +68,11 @@ README.md  LICENSE
 ### Task 1: SwiftPM 骨架
 
 **Files:**
-- Create: `Package.swift`
-- Create: `Sources/CleanKit/CleanKit.swift`(占位)、`Sources/ScanKit/ScanKit.swift`(占位)、`Sources/AppCore/AppCore.swift`(占位)
-- Create: `Sources/Raccoon/RaccoonApp.swift`(最小可运行 App)
-- Create: `Tests/CleanKitTests/SmokeTests.swift`、`Tests/ScanKitTests/SmokeTests.swift`、`Tests/AppCoreTests/SmokeTests.swift`
 
+- [ ] Create: `Package.swift`
+- [ ] Create: `Sources/CleanKit/CleanKit.swift`(占位)、`Sources/ScanKit/ScanKit.swift`(占位)、`Sources/AppCore/AppCore.swift`(占位)
+- [ ] Create: `Sources/Raccoon/RaccoonApp.swift`(最小可运行 App)
+- [ ] Create: `Tests/CleanKitTests/SmokeTests.swift`、`Tests/ScanKitTests/SmokeTests.swift`、`Tests/AppCoreTests/SmokeTests.swift`
 - [ ] **Step 1: 写 Package.swift**
 
 ```swift
@@ -147,7 +147,7 @@ final class SmokeTests: XCTestCase {
 
 - [ ] **Step 4: 构建并测试**
 
-Run: `swift build && swift test`
+Run: `swift build && swift test`  
 Expected: `Build complete!` / `Executed 3 tests, with 0 failures`
 
 - [ ] **Step 5: Commit**
@@ -158,12 +158,13 @@ git add -A && git commit -m "chore: SwiftPM 骨架(4 target + 3 test target)"
 
 ---
 
+
 ### Task 2: CleanKit · ProtectionStore
 
 **Files:**
-- Create: `Sources/CleanKit/ProtectionStore.swift`
-- Test: `Tests/CleanKitTests/ProtectionStoreTests.swift`
 
+- [ ] Create: `Sources/CleanKit/ProtectionStore.swift`
+- [ ] Test: `Tests/CleanKitTests/ProtectionStoreTests.swift`
 - [ ] **Step 1: 写失败测试**
 
 `Tests/CleanKitTests/ProtectionStoreTests.swift`:
@@ -242,7 +243,7 @@ final class ProtectionStoreTests: XCTestCase {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `Scripts/test.sh --filter ProtectionStoreTests`
+Run: `Scripts/test.sh --filter ProtectionStoreTests`  
 Expected: 编译错误 `cannot find 'ProtectionStore' in scope`
 
 - [ ] **Step 3: 实现**
@@ -328,7 +329,7 @@ public struct ProtectionStore: Sendable {
 
 - [ ] **Step 4: 运行确认通过**
 
-Run: `Scripts/test.sh --filter ProtectionStoreTests`
+Run: `Scripts/test.sh --filter ProtectionStoreTests`  
 Expected: `Executed 7 tests, with 0 failures`
 
 - [ ] **Step 5: Commit**
@@ -339,12 +340,13 @@ git add -A && git commit -m "feat(CleanKit): 硬保护与用户排除(组件级�
 
 ---
 
+
 ### Task 3: CleanKit · TrashService + CleanExecutor
 
 **Files:**
-- Create: `Sources/CleanKit/TrashService.swift`
-- Test: `Tests/CleanKitTests/TrashServiceTests.swift`、`Tests/CleanKitTests/CleanExecutorTests.swift`
 
+- [ ] Create: `Sources/CleanKit/TrashService.swift`
+- [ ] Test: `Tests/CleanKitTests/TrashServiceTests.swift`、`Tests/CleanKitTests/CleanExecutorTests.swift`
 - [ ] **Step 1: 写失败测试**
 
 `Tests/CleanKitTests/TrashServiceTests.swift`:
@@ -461,7 +463,7 @@ final class CleanExecutorTests: XCTestCase {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `Scripts/test.sh --filter 'TrashServiceTests|CleanExecutorTests'`
+Run: `Scripts/test.sh --filter 'TrashServiceTests|CleanExecutorTests'`  
 Expected: 编译错误(类型未定义)
 
 - [ ] **Step 3: 实现**
@@ -671,7 +673,7 @@ public struct JSONHistoryStore: HistoryStoring {
 
 - [ ] **Step 5: 运行确认通过**
 
-Run: `Scripts/test.sh --filter 'TrashServiceTests|CleanExecutorTests'`
+Run: `Scripts/test.sh --filter 'TrashServiceTests|CleanExecutorTests'`  
 Expected: `Executed 6 tests, with 0 failures`(注意:`testFileManagerTrashService_trashesTempFile` 会向你的废纸篓放入一个临时文件,属预期)
 
 - [ ] **Step 6: Commit**
@@ -685,10 +687,10 @@ git add -A && git commit -m "feat(CleanKit): 废纸篓服务 + 清理执行器(�
 ### Task 4: CleanKit · SnapshotCleaner 测试 + SystemIntegration(运行中检测/AppIdentity)
 
 **Files:**
-- Test: `Tests/CleanKitTests/SnapshotCleanerTests.swift`、`Tests/CleanKitTests/SystemIntegrationTests.swift`
-- Modify: `Sources/CleanKit/SnapshotCleaner.swift`(仅一处:`run(_:)` 返回 `(stdout, terminationStatus)`,`deleteSnapshot` 改以退出码 0 为成功主信号——审查 M1;其余不动)
-- Create: `Sources/CleanKit/SystemIntegration.swift`
 
+- [ ] Test: `Tests/CleanKitTests/SnapshotCleanerTests.swift`、`Tests/CleanKitTests/SystemIntegrationTests.swift`
+- [ ] Modify: `Sources/CleanKit/SnapshotCleaner.swift`(仅一处:`run(_:)` 返回 `(stdout, terminationStatus)`,`deleteSnapshot` 改以退出码 0 为成功主信号——审查 M1;其余不动)
+- [ ] Create: `Sources/CleanKit/SystemIntegration.swift`
 - [ ] **Step 1: 写失败测试**
 
 `Tests/CleanKitTests/SnapshotCleanerTests.swift`:
@@ -752,7 +754,7 @@ final class SystemIntegrationTests: XCTestCase {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `Scripts/test.sh --filter 'SnapshotCleanerTests|SystemIntegrationTests'`
+Run: `Scripts/test.sh --filter 'SnapshotCleanerTests|SystemIntegrationTests'`  
 Expected: 编译错误(`appName(for:)` 未定义)
 
 - [ ] **Step 3: 实现**
@@ -815,12 +817,12 @@ public struct AppIdentityResolver: Sendable {
 
 - [ ] **Step 4: 运行确认通过**
 
-Run: `Scripts/test.sh --filter 'SnapshotCleanerTests|SystemIntegrationTests'`
+Run: `Scripts/test.sh --filter 'SnapshotCleanerTests|SystemIntegrationTests'`  
 Expected: `Executed 6 tests, with 0 failures`
 
 - [ ] **Step 5: 全量测试 + Commit**
 
-Run: `Scripts/test.sh`
+Run: `Scripts/test.sh`  
 Expected: 全绿
 
 ```bash
@@ -829,12 +831,13 @@ git add -A && git commit -m "feat(CleanKit): 运行中应用检测 + AppIdentity
 
 ---
 
+
 ### Task 5: ScanKit · 规则模型 + RuleStore
 
 **Files:**
-- Create: `Sources/ScanKit/RuleModels.swift`、`Sources/ScanKit/RuleStore.swift`
-- Test: `Tests/ScanKitTests/RuleStoreTests.swift`
 
+- [ ] Create: `Sources/ScanKit/RuleModels.swift`、`Sources/ScanKit/RuleStore.swift`
+- [ ] Test: `Tests/ScanKitTests/RuleStoreTests.swift`
 - [ ] **Step 1: 写失败测试**
 
 `Tests/ScanKitTests/RuleStoreTests.swift`:
@@ -1042,7 +1045,7 @@ final class RuleStoreTests: XCTestCase {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `Scripts/test.sh --filter RuleStoreTests`
+Run: `Scripts/test.sh --filter RuleStoreTests`  
 Expected: 编译错误(类型未定义)
 
 - [ ] **Step 3: 实现 RuleModels**
@@ -1187,7 +1190,7 @@ public struct RuleStore: Sendable {
 
 - [ ] **Step 5: 运行确认通过**
 
-Run: `Scripts/test.sh --filter RuleStoreTests`
+Run: `Scripts/test.sh --filter RuleStoreTests`  
 Expected: `Executed 15 tests, with 0 failures`
 
 - [ ] **Step 6: Commit**
@@ -1195,6 +1198,7 @@ Expected: `Executed 15 tests, with 0 failures`
 ```bash
 git add -A && git commit -m "feat(ScanKit): 规则模型 + RuleStore(逐条校验/重叠告警/作用域与硬保护冲突拦截)"
 ```
+
 
 ### Task 6: rules.json 首发规则库
 
@@ -1386,6 +1390,7 @@ git add -A && git commit -m "feat(ScanKit): 首发规则库 27 条(四类,含排
 ```
 
 ---
+
 
 ### Task 7: ScanKit · ScanModels + ScanEngine 默认模式
 
@@ -1860,6 +1865,7 @@ Expected: `Executed 10 tests, with 0 failures`
 git add -A && git commit -m "feat(ScanKit): ScanEngine 默认模式(一级子项=删除单元)+ 聚合/进度/符号链接防御"
 ```
 
+
 ### Task 8: ScanEngine · include 模式 + 加固(权限/取消/快照集成)
 
 **Files:**
@@ -2149,6 +2155,7 @@ git add -A && git commit -m "feat(AppCore): 用户排除清单(@Observable + Use
 ```
 
 ---
+
 
 ### Task 10: AppCore · ScanViewModel + AppScanService
 
@@ -2483,6 +2490,7 @@ git add -A && git commit -m "feat(AppCore): ScanViewModel 状态机 + AppScanSer
 > - 复审通过:7 项如实落地,安全钉测试(skipsProtectedAtExecutorLevel / testScanFlow)无回归。
 
 ---
+
 
 ### Task 11: App 骨架 · 入口 + 侧边栏 + L10n
 
@@ -3512,5 +3520,34 @@ git add -A && git commit -m "docs: README/LICENSE,一期验收完成"
 - **已知取舍(实现时保持一致)**:1) `exclude` 仅匹配路径末段(规格"相对 glob"的 v1 简化);2) App 图标仅在能按 bundle id 定位已装/运行应用时显示,否则显示文件夹图标(规格"查不到则显示目录名"的落实);3) 快照项大小按 0 字节计,报告单列快照数。
 - **Swift 6 严格并发适配(自审时修正,各 Task 已保持一致)**:swift-tools 6.4 默认 Swift 6 语言模式,`NSWorkspace` 为 @MainActor 隔离 —— 因此 ① `SnapshotCleanerServicing` 的方法为 `async`(actor mock 才能满足协议);② `WorkspaceRunningAppDetector` 与 `AppIdentityResolver.appName(for:)` 收在 `@MainActor`;③ 引擎的 `runningBundleIDs` 依赖注入为 `@Sendable () async -> Set<String>`,扫描开始时取一次快照;④ appName 在扫描收尾经 `MainActor.run` 一次性批量补齐,不逐项跨线程。
 - **类型一致性**:核心类型(RuleStore/LoadedRules/ScanHit/CleanItem/CleanReport/ScanServicing 签名)已在各 Task 间交叉核对;`MockSnapshots`/`MockTrash` 在各 test target 内独立定义。
+
+---
+
+## 终审记录(2026-10-15,全部 17 任务完成后)
+
+**结论:Ready to merge**(零 Critical;四道安全门代码层端到端贯通无绕过,双层口径一致,`trashItem` 全仓唯一删除调用点 grep 实证,75/75 绿,树干净无 TODO 残留)。规格逐节覆盖:§3/§5.1/§5.3/§6.1-6.4/§7.1/§9/§10 ✅;§4/§5.2/§7.2/§8/§11 ⚠️(缺口见下,均文案/记录/加固级,无结构问题)。
+
+**终审 I-1 已随手修**:home.startHint 双语绝对化措辞(诚实化链唯一漏网)→ 9787ee8,与 confirm.cautiousSection 同款两事实表述。**I-2 已裁决**:§8 TCC 失败面过大时「完成报告引导授予完全磁盘访问权限(深链系统设置)」——非 §11 验收项,**登记缓议**(下表 #3),Phase 2 候选。I-3(CI 缺失)QA 清单已如实标注待补。
+
+### 统一 polish 清单(Phase 2 / 分发前处理;承自各任务执行记录 + 终审新增)
+
+1. 报告页全跳过仍显示成功图标(Task 14 M-2:trashedCount==0 && !skipped.isEmpty 时图标条件化)
+2. 报告页死胡同:消费 `common.close` 加关闭按钮(Task 14 M-5)
+3. **§8 FDA 深链引导**(终审 I-2):TCC 拒绝失败面过大时,报告页引导授予完全磁盘访问权限(`x-apple.systempreferences` 深链)
+4. CI:GitHub Actions macOS runner,门槛 75 绿(I-3/QA 已记录)
+5. 明细工具栏补「反选」或登记规格偏差(终审 M-1:spec §7.2.4 原文有,计划即偏离且无裁决记录)
+6. 清理逐项进度接线:CleanExecutor.onProgress(已有+有测试)→ ScanViewModel → UI(终审 M-2)
+7. rejected/warnings 落 os.Logger:AppScanService.swift:17-18 现直接丢弃;社区规则落地(PR 通道)前必须完成(终审 M-3)
+8. 未消费 L10n 键 `detail.title`/`settings.title`:消费或删除(`common.close` 即 #2)(终审 M-4)
+9. ConfirmCleanView 取消按钮死 `.cancelAction` 修饰收敛(终审 M-5:两 shortcut 仅最后一个生效)
+10. VM 层 SnapshotCleaner 注入缝(终审 M-6:未来选中快照的 VM 测试会真调 tmutil)
+11. 用户排除符号链接双形态加固(终审 M-7:方向安全,多展示不漏删)
+12. glob 作规则根显式拒绝或钉测试(终审 M-8:现 fail-safe 静默空结果)
+13. README 路线图「✅ 完成」加 QA 清单锚点脚注(终审 M-13)
+14. spec/README 补 CleanKit import AppKit 豁免一句(终审 M-9:§4 内部张力,解法已合理)
+15. Info.plist 可选键 CFBundleInfoDictionaryVersion/LSApplicationCategoryType(Task 16 M-3:分发/上架前)
+16. history.json 增长上限(终审 M-12:append 全量重写无裁剪;一期可接受)
+17. bundleIDComponent「空段非法」行内注释未随迁(终审 M-11);RuleStoreTests removeItem 偶发失败根因(Task 5 Minor:现跨 run 自愈兜底)
+18. 6 组人工 GUI/VoiceOver/真实演练项(docs/superpowers/qa/phase1-qa-checklist.md ⏳ 项)
 
 
