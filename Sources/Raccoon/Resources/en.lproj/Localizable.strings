@@ -10,7 +10,7 @@
 "common.close" = "Close";
 "common.clean" = "Clean…";
 "common.moveToTrash" = "Move to Trash";
-"home.startHint" = "Scan system junk and app caches; preview before deleting.\nDeletions go to Trash and are always recoverable.";
+"home.startHint" = "Scan system junk and app caches; preview before deleting.\nFile deletions go to Trash; local snapshots are reclaimed by the system, bypassing Trash.";
 "home.lastCleanup" = "Last cleanup freed %@";
 "home.neverCleaned" = "Never cleaned";
 "home.scanning" = "Scanning… (%d/%d rules)";

@@ -10,7 +10,7 @@
 "common.close" = "关闭";
 "common.clean" = "清理…";
 "common.moveToTrash" = "移入废纸篓";
-"home.startHint" = "扫描系统垃圾与应用缓存，先预览再删除。\n所有删除只进废纸篓，随时可恢复。";
+"home.startHint" = "扫描系统垃圾与应用缓存，先预览再删除。\n文件删除只进废纸篓；本地快照由系统直接回收，不经废纸篓。";
 "home.lastCleanup" = "上次清理释放 %@";
 "home.neverCleaned" = "尚未清理过";
 "home.scanning" = "正在扫描…（%d/%d 项规则）";
