@@ -1,5 +1,7 @@
 # Raccoon · 浣熊清理 🦝
 
+[![CI](https://github.com/kidd-cn/Raccoon/actions/workflows/ci.yml/badge.svg)](https://github.com/kidd-cn/Raccoon/actions/workflows/ci.yml)
+
 macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 预览勾选 → 确认后移入废纸篓。开源免费(MIT),吉祥物是浣熊,对标开源清理工具 Mole 的完整功能集,分六期实现。
 
 - **macOS 原生**:Swift 6 + SwiftUI,纯系统控件,自动浅色/深色模式,零第三方依赖
@@ -39,6 +41,8 @@ Scripts/test.sh        # 全量测试(81 用例)——唯一合法测试入口,�
 swift run              # 运行应用(开发模式)
 Scripts/bundle-app.sh  # 组装 Raccoon.app(adhoc 签名,输出到 build/)
 ```
+
+CI:GitHub Actions(`macos-latest`)跑 `swift build` + `Scripts/test.sh` + L10n 键集一致性比对,见 `.github/workflows/ci.yml`。`Scripts/test.sh` 会按活动工具链自动决定是否加载 CLT 的测试宏插件库,本地与 CI 共用同一入口。
 
 ## 贡献清理规则
 

@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 同一分支的旧运行被新推送取代时取消,省 runner 时间也免看陈旧结果
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # 先打工具链信息:构建失败时第一眼要能判断是代码问题还是 runner 镜像/SDK 不匹配
+      - name: 工具链信息
+        run: |
+          sw_vers
+          xcode-select -p
+          swift --version
+
+      - name: 构建
+        run: swift build
+
+      # 门槛:全绿(用例数随开发增长,勿在此硬编码数字——跑出来的计数在下方一步打印)
+      - name: 测试
+        run: Scripts/test.sh
+
+      # 项目纪律:zh-Hans 与 en 键集必须 1:1(纯键名比对,值可各自表述)
+      - name: L10n 键集一致性(zh/en 1:1)
+        run: |
+          diff <(grep -o '^"[^"]*"' Sources/Raccoon/Resources/zh-Hans.lproj/Localizable.strings | sort) \
+               <(grep -o '^"[^"]*"' Sources/Raccoon/Resources/en.lproj/Localizable.strings | sort)
