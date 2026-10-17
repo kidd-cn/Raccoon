@@ -3,7 +3,7 @@ import AppCore
 import UninstallKit
 
 struct AppDetailView: View {
-    @Bindable var vm: UninstallViewModel
+    let vm: UninstallViewModel
     let app: InstalledApp
 
     var body: some View {
@@ -126,6 +126,7 @@ struct LeftoverRow: View {
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
+        // 行级 tap 依赖 SwiftUI 控件优先权:点 Toggle 不触发本手势,双通道各触发一次
         .onTapGesture { onToggle() }
     }
 }

@@ -38,6 +38,8 @@ public final class UninstallViewModel {
 
     public private(set) var cleanState: CleanState?
     public private(set) var cleanFlow: CleanFlow?
+    /// 最近一次卸载是否真的移除了应用本体;本体被跳过后报告页不应再引导孤儿扫描。
+    public private(set) var lastUninstallBundleRemoved = true
     public private(set) var cleanProgress = CleanProgress(done: 0, total: 0)
     public private(set) var lastCleanup: CleanReport?
     public var confirmFlow: CleanFlow?
@@ -179,6 +181,9 @@ public final class UninstallViewModel {
 
     private func runClean(_ items: [CleanItem], flow: CleanFlow) {
         guard cleanState == nil else { return }
+        let uninstallingApp = flow == .apps ? focusedApp : nil
+        // 与一期同理:明细页立即让位,否则导航栈上的详情会盖住清理进度与报告。
+        if flow == .apps { detailAppID = nil }
         confirmFlow = nil
         cleanState = .cleaning
         cleanFlow = flow
@@ -198,18 +203,24 @@ public final class UninstallViewModel {
                 Logger(subsystem: "com.raccooncleaner.Raccoon", category: "history")
                     .error("history append failed: \(String(describing: error))")
             }
-            self.applyCleanOutcome(report, submitted: items, flow: flow)
+            self.applyCleanOutcome(report, submitted: items, flow: flow, app: uninstallingApp)
         }
     }
 
     /// 与一期同名口径:已清理 = 提交路径 − skipped 路径;跳过项仍在磁盘,必须留在清单里。
-    private func applyCleanOutcome(_ report: CleanReport, submitted: [CleanItem], flow: CleanFlow) {
+    private func applyCleanOutcome(_ report: CleanReport, submitted: [CleanItem], flow: CleanFlow,
+                                   app: InstalledApp?) {
         let gone = Set(submitted.map(\.path)).subtracting(report.skipped.map(\.path))
         switch flow {
         case .apps:
-            if let app = focusedApp, gone.contains(app.appPath) {
-                apps.removeAll { $0.bundleID == app.bundleID }
-                detailAppID = nil
+            if let app {
+                let removed = gone.contains(app.appPath)
+                lastUninstallBundleRemoved = removed
+                if removed {
+                    apps.removeAll { $0.bundleID == app.bundleID }
+                }
+            } else {
+                lastUninstallBundleRemoved = true
             }
             // 本体是否已清理都只按 gone 差集收敛:未勾选的 userData 与已提交但 skipped
             // 的关联数据仍在磁盘,必须留在剩余项里(已清理项移出、跳过项保留)。

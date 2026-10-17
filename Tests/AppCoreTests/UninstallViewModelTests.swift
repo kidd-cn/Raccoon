@@ -90,6 +90,7 @@ final class UninstallViewModelTests {
         #expect(report.freedBytes == 110)
         #expect(vm.apps.isEmpty)                             // 本体已清理 → 移出列表
         #expect(vm.detailAppID == nil)
+        #expect(vm.lastUninstallBundleRemoved == true)
         #expect(try history.loadAll().count == 1)
         #expect(vm.lastCleanup?.freedBytes == 110)
     }
@@ -107,6 +108,8 @@ final class UninstallViewModelTests {
         #expect(vm.apps.map(\.bundleID) == ["com.example.foo"])   // 本体被跳过 → 留列表
         #expect(vm.leftovers.isEmpty)                            // 关联数据已进废纸篓 → 收敛
         #expect(vm.selectedLeftoverPaths.isEmpty)
+        #expect(vm.detailAppID == nil)                           // 清理开始即让详情退栈
+        #expect(vm.lastUninstallBundleRemoved == false)
         guard case .report(let report) = vm.cleanState else { Issue.record(); return }
         #expect(report.skipped.map(\.path) == [app.appPath])
         #expect(report.freedBytes == 10)
@@ -122,6 +125,24 @@ final class UninstallViewModelTests {
         #expect(vm.cleanState == nil)
         #expect(vm.phase == .list)
         #expect(vm.detailAppID == nil)
+    }
+
+    // 清理一开始详情页就必须让位:否则导航栈上的详情会盖住进度与报告。
+    @Test(.timeLimit(.minutes(1))) func uninstallClosesDetailImmediately() async {
+        let app = makeTestApp(home: home)
+        let trash = GatedTrash()
+        let vm = makeVM(apps: [app], leftovers: ["com.example.foo": []], trash: trash)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.openDetail(app); await vm.leftoverTask?.value
+        #expect(vm.detailAppID == "com.example.foo")
+
+        vm.requestUninstall(); vm.uninstall()
+        #expect(vm.detailAppID == nil)       // 清理 Task 尚未完成时就必须已退栈
+
+        await trash.waitUntilStarted()
+        await trash.release()
+        await vm.cleanTask?.value
+        #expect(vm.lastUninstallBundleRemoved == true)
     }
 
     // 选择集混入 leftovers 之外的路径不会被提交;作用域白名单本身由下一条用例钉住。
@@ -646,5 +667,33 @@ final class MultiGatedOrphanScanner: OrphanScanning, @unchecked Sendable {
         await gate.enter(index: index)
         progress(OrphanScanProgress(completedLocations: index, totalLocations: 8))
         return result
+    }
+}
+
+/// 让清理挂起在废纸篓调用上,用于断言「清理刚开始、尚未完成」时的 UI 状态。
+actor GatedTrash: TrashServicing {
+    private(set) var calls: [String] = []
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var started = false
+    private var startedWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func waitUntilStarted() async {
+        if started { return }
+        await withCheckedContinuation { startedWaiters.append($0) }
+    }
+
+    func release() {
+        continuation?.resume()
+        continuation = nil
+    }
+
+    func trash(_ path: String) async -> TrashOutcome {
+        calls.append(path)
+        started = true
+        let waiters = startedWaiters
+        startedWaiters = []
+        for waiter in waiters { waiter.resume() }
+        await withCheckedContinuation { continuation = $0 }
+        return .trashed
     }
 }

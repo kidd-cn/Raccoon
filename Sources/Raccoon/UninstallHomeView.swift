@@ -115,7 +115,7 @@ struct UninstallHomeView: View {
     /// 应用本体已删但仍有未清理/被跳过的关联数据时,这些数据已无人归属,
     /// 正确续作是扫孤儿。报告页直接给出该入口,避免用户回到列表后无从下手。
     private var scanOrphansFromReportAction: (() -> Void)? {
-        guard vm.cleanFlow == .apps, vm.remainingCount > 0 else { return nil }
+        guard vm.cleanFlow == .apps, vm.remainingCount > 0, vm.lastUninstallBundleRemoved else { return nil }
         return {
             vm.returnFromReport()
             vm.tab = .orphans

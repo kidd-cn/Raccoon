@@ -3,7 +3,7 @@ import AppCore
 import UninstallKit
 
 struct OrphanScanView: View {
-    @Bindable var vm: UninstallViewModel
+    let vm: UninstallViewModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,6 +20,7 @@ struct OrphanScanView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                         .disabled(vm.phase != .list)
+                    scanAvailabilityNote
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .scanning:
@@ -39,6 +40,36 @@ struct OrphanScanView: View {
                 results
             }
         }
+    }
+
+    /// 扫描按钮被禁用时给出原因与出口:发现中显示进度文案,失败时提供重试。
+    @ViewBuilder
+    private var scanAvailabilityNote: some View {
+        switch vm.phase {
+        case .discovering:
+            Text(loc("uninstall.discovering"))
+                .font(.caption).foregroundStyle(.secondary)
+        case .failed(let message):
+            VStack(spacing: 8) {
+                Text(loc("uninstall.failed", message))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button(loc("home.retry")) { vm.startDiscovery(force: true) }
+            }
+        case .list:
+            EmptyView()
+        }
+    }
+
+    /// 失败位置按目录名展示;未知 id 时回退到 id 本身。
+    private var failedLocationNames: String {
+        let names = vm.failedLocationIDs.compactMap { id in
+            LeftoverLocations.all.first { $0.id == id }?.folder
+        }
+        guard !names.isEmpty else {
+            return vm.failedLocationIDs.sorted().joined(separator: ", ")
+        }
+        return Array(Set(names)).sorted().joined(separator: ", ")
     }
 
     var results: some View {
@@ -64,7 +95,7 @@ struct OrphanScanView: View {
                 }
             }
             if !vm.failedLocationIDs.isEmpty {
-                Text(loc("orphans.failedLocations", vm.failedLocationIDs.sorted().joined(separator: ", ")))
+                Text(loc("orphans.failedLocations", failedLocationNames))
                     .font(.caption).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(8)
@@ -97,9 +128,10 @@ struct OrphanScanView: View {
                      vm.selectedOrphanItems.count,
                      byteText(vm.selectedOrphanItems.reduce(Int64(0)) { $0 + $1.sizeBytes })))
                 .monospacedDigit()
-            if vm.selectedOrphanItems.contains(where: { $0.ownership == .appName }) {
+            if vm.orphans.contains(where: { $0.ownership == .appName }) {
                 Text(loc("orphans.defaultUncheckedHint"))
                     .font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             Spacer()
             Button(loc("orphans.clean")) { vm.requestCleanOrphans() }
