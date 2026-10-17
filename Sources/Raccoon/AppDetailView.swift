@@ -99,7 +99,9 @@ struct AppDetailView: View {
             Spacer()
             Button(loc("uninstall.button")) { vm.requestUninstall() }
                 .buttonStyle(.borderedProminent)
-                .disabled(vm.cleanState != nil || vm.isLoadingLeftovers)
+                // 只按清理状态禁用:残留定位慢/卡住时也不得无声吞掉卸载点击,
+                // 此时勾选集已随 openDetail 清空,提交口径即「仅应用本体」,安全。
+                .disabled(vm.cleanState != nil)
         }
         .padding(12)
     }

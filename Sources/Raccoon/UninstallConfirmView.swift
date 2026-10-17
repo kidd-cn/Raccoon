@@ -26,17 +26,24 @@ struct UninstallConfirmView: View {
                     .foregroundStyle(.yellow)
             }
 
-            let userData = pickedItems.filter { $0.safety == .userData }
-            if !userData.isEmpty {
-                Divider()
-                Text(loc("uninstall.confirm.userDataSection"))
-                    .font(.headline).foregroundStyle(.orange)
-                ForEach(userData) { item in
-                    Text(item.path)
-                        .font(.caption).foregroundStyle(.secondary)
-                        .lineLimit(1).truncationMode(.middle)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    let userData = pickedItems.filter { $0.safety == .userData }
+                    if !userData.isEmpty {
+                        Divider()
+                        Text(loc("uninstall.confirm.userDataSection"))
+                            .font(.headline).foregroundStyle(.orange)
+                        ForEach(userData) { item in
+                            Text(item.path)
+                                .font(.caption).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle)
+                        }
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            // 条目很多时窗口高度有上限,超出部分滚动,底部按钮始终可见可点。
+            .frame(maxHeight: 380)
 
             // 删除前最后一道 UI 防线:⏎ 给取消、Esc 也给取消;卸载/清理仅点按触发
             HStack {

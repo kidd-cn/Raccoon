@@ -36,10 +36,15 @@ struct UninstallHomeView: View {
                 }
             }
         }
-        .sheet(item: $vm.confirmFlow) { flow in
-            UninstallConfirmView(vm: vm, flow: flow)
+        // 确认卡片经独立 NSWindow 呈现(ConfirmWindowPresenter):本机上 sheet 与
+        // overlay 均无法可见地盖在 navigationDestination 推入的详情页上。
+        // onChange 在此视图已证实会随 confirmFlow 变化触发(body 重渲染有日志佐证)。
+        .onChange(of: vm.confirmFlow) {
+            ConfirmWindowPresenter.sync(confirmFlow: vm.confirmFlow, vm: vm)
         }
     }
+
+    /// 内嵌确认卡片已由 ConfirmWindowPresenter 的独立窗口替代。
 
     @ViewBuilder
     var appsPane: some View {
