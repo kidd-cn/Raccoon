@@ -38,11 +38,10 @@ struct UninstallConfirmView: View {
                 }
             }
 
-            // 删除前最后一道 UI 防线:默认键(⏎)给取消,卸载/清理仅点按触发
+            // 删除前最后一道 UI 防线:⏎ 给取消、Esc 也给取消;卸载/清理仅点按触发
             HStack {
                 Spacer()
                 Button(loc("common.cancel")) { vm.cancelConfirm() }
-                    .keyboardShortcut(.cancelAction)
                     .keyboardShortcut(.defaultAction)
                 Button(loc(flow == .apps ? "uninstall.confirm.button" : "orphans.clean.do")) {
                     if flow == .apps { vm.uninstall() } else { vm.cleanOrphans() }
@@ -50,6 +49,7 @@ struct UninstallConfirmView: View {
                 .buttonStyle(.borderedProminent)
             }
         }
+        .onExitCommand { vm.cancelConfirm() }
         .padding(20)
         .frame(width: 480)
     }
