@@ -20,7 +20,7 @@ final class AppDiscoveryTests {
 
     @Test func findsTopLevelAndOneSubdirectoryLevel() async throws {
         let root = try home.appRoot()
-        try home.makeApp("Alpha", bundleID: "com.example.alpha", inRoot: root)
+        let alpha = try home.makeApp("Alpha", bundleID: "com.example.alpha", inRoot: root)
         // 一层子目录与更深层都必须相对应用根构造,否则测不到「最多一层」的边界。
         let sub = try home.makeDir("Applications/Utilities")
         try home.makeApp("Beta", bundleID: "com.example.beta", inRoot: sub)
@@ -30,6 +30,7 @@ final class AppDiscoveryTests {
         let result = try await discover(roots: [root])
         #expect(Set(result.apps.map(\.bundleID)) == ["com.example.alpha", "com.example.beta"])
         #expect(result.unreadableCount == 0)
+        #expect(result.apps[0].sizeBytes == FileSize.bytes(at: alpha))
     }
 
     @Test func skipsAppleAppsAndMissingPlist() async throws {
@@ -94,5 +95,116 @@ final class AppDiscoveryTests {
         try home.makeApp("Alpha", bundleID: "com.example.alpha", inRoot: root)
         let result = try await discover(roots: [root])
         #expect(result.apps.map(\.name) == ["Alpha", "Zeta"])
+    }
+
+    @Test func followsSymlinkedRoot() async throws {
+        let root = try home.appRoot()
+        let app = try home.makeApp("Foo", bundleID: "com.example.foo", inRoot: root)
+        let link = home.url.appendingPathComponent("LinkedApplications")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: root)
+
+        let result = try await discover(roots: [link])
+        #expect(result.apps.map(\.bundleID) == ["com.example.foo"])
+        #expect(result.apps[0].appPath == app.resolvingSymlinksInPath().path)
+    }
+
+    @Test func ignoresPlainFileApp() async throws {
+        let root = try home.appRoot()
+        try home.makeFile("Applications/File.app", bytes: 10)
+
+        let result = try await discover(roots: [root])
+        #expect(result.apps.isEmpty)
+        #expect(result.unreadableCount == 0)   // 文件型 .app 不是「无法识别的应用」
+    }
+
+    @Test func skipsAppleBundleIDsCaseInsensitivelyAndCountsEmptyIDUnreadable() async throws {
+        let root = try home.appRoot()
+        try home.makeApp("Caps", bundleID: "COM.APPLE.Caps", inRoot: root)
+        try home.makeApp("EmptyID", bundleID: "", inRoot: root)
+
+        let result = try await discover(roots: [root])
+        #expect(result.apps.isEmpty)
+        #expect(result.unreadableCount == 1)
+    }
+
+    @Test func recognizesUppercaseAppExtension() async throws {
+        let root = try home.appRoot()
+        let lower = try home.makeApp("Upper", bundleID: "com.example.upper", inRoot: root)
+        try FileManager.default.moveItem(
+            at: lower, to: root.appendingPathComponent("Upper.APP"))
+
+        let result = try await discover(roots: [root])
+        #expect(result.apps.map(\.bundleID) == ["com.example.upper"])
+    }
+
+    @Test func doesNotDescendIntoNestedAppBundles() async throws {
+        let root = try home.appRoot()
+        try home.makeApp("Good", bundleID: "com.example.good", inRoot: root)
+        try home.makeApp("Helper", bundleID: "com.example.helper",
+                         inRoot: root.appendingPathComponent("Good.app/Contents/MacOS"))
+
+        let result = try await discover(roots: [root])
+        #expect(result.apps.map(\.bundleID) == ["com.example.good"])
+        #expect(result.unreadableCount == 0)
+    }
+
+    @Test func sortsAcrossRootsNumericallyAndTiesByBundleID() async throws {
+        let rootA = try home.appRoot("RootA")
+        let rootB = try home.appRoot("RootB")
+        try home.makeApp("Zeta", bundleID: "com.example.zeta", inRoot: rootA)
+        try home.makeApp("Alpha", bundleID: "com.example.alpha", inRoot: rootB)
+        // 无排序时枚举顺序为 [Zeta, Alpha]。
+        let acrossRoots = try await discover(roots: [rootA, rootB])
+        #expect(acrossRoots.apps.map(\.name) == ["Alpha", "Zeta"])
+
+        let numbers = try home.appRoot("Numbers")
+        try home.makeApp("File 10", bundleID: "com.example.file10", inRoot: numbers)
+        try home.makeApp("File 2", bundleID: "com.example.file2", inRoot: numbers)
+        let numeric = try await discover(roots: [numbers])
+        #expect(numeric.apps.map(\.name) == ["File 2", "File 10"])
+
+        // 同名时以 Bundle ID 为二级键(否则保留根顺序 zzz 在前)。
+        let tieA = try home.appRoot("TieA")
+        let tieB = try home.appRoot("TieB")
+        try home.makeApp("Same", bundleID: "com.example.zzz", inRoot: tieA)
+        try home.makeApp("Same", bundleID: "com.example.aaa", inRoot: tieB)
+        let tied = try await discover(roots: [tieA, tieB])
+        #expect(tied.apps.map(\.bundleID) == ["com.example.aaa", "com.example.zzz"])
+    }
+
+    @Test func appliesRawPathExclusion() async throws {
+        let root = try home.appRoot()
+        let plain = try home.makeApp("Plain", bundleID: "com.example.plain", inRoot: root)
+
+        let result = try await discover(roots: [root], exclusions: [plain.path])
+        #expect(result.apps.isEmpty)
+    }
+
+    @Test func appliesResolvedPathExclusionToSymlinkedApp() async throws {
+        let root = try home.appRoot()
+        // Real.app 是普通目录但名字以 .app 结尾:作为候选处理、不会下钻,
+        // 因此其中的真实应用只能经 Excluded.app 符号链接被发现。
+        let real = try home.makeApp("Excluded", bundleID: "com.example.excluded",
+                                    inRoot: root.appendingPathComponent("Real.app"))
+        try FileManager.default.createSymbolicLink(
+            at: root.appendingPathComponent("Excluded.app"), withDestinationURL: real)
+
+        // 排除项是解析后路径;候选的原始路径(root/Excluded.app)不匹配,
+        // 必须解析后再问一次才能拦住。
+        let result = try await discover(roots: [root], exclusions: [real.path])
+        #expect(result.apps.isEmpty)
+    }
+
+    @Test func throwsOnCancellation() async throws {
+        let root = try home.appRoot()
+        for index in 0..<20 {
+            try home.makeApp("App\(index)", bundleID: "com.example.app\(index)", inRoot: root)
+        }
+        let discovery = AppDiscovery(appRoots: [root], running: Running())
+        let task = Task { try await discovery.discover(exclusions: []) { _ in } }
+        task.cancel()
+        await #expect(throws: CancellationError.self) {
+            try await task.value
+        }
     }
 }
