@@ -107,7 +107,7 @@
 - **造数步骤**:
   1. 创建无主残留:`mkdir -p ~/Library/Caches/com.example.nonexistent-raccoon-test && printf 'orphan' > ~/Library/Caches/com.example.nonexistent-raccoon-test/test-orphan.bin`。
   2. 打开「卸载」→「孤儿残留」→ 扫描;该目录应归入「已确认归属(高置信)」组。
-  3. **失败位置**:临时执行 `chmod 000 ~/Library/Caches` 制造枚举失败 → 重新扫描 → 确认底部失败位置以目录名(如 `Caches`)展示 → 先记录原权限(`stat -f %A ~/Library/Caches`,实测默认 `700`)并用同值恢复(通常 `chmod 700 ~/Library/Caches`)。
+  3. **失败位置**:先记录原权限(`stat -f %A ~/Library/Caches`,实测默认 `700`)→ 临时执行 `chmod 000 ~/Library/Caches` 制造枚举失败 → 重新扫描 → 确认底部失败位置以目录名(如 `Caches`)展示 → 用记录值恢复(通常 `chmod 700 ~/Library/Caches`;切勿把 `chmod 000` 后的 `0` 当作原值)。
   4. 空态:删除第 1 步造数目录后复扫:若无其他真实孤儿残留应显示空态;否则至少确认该造数目录已从结果消失。
 - 预期:真实无主残留出现;「已确认归属(高置信)」与「未确认归属」分组正确;未确认项默认不勾选;失败位置以目录名展示;空库时显示空态。
 - 自动半段见 A4/A10。
