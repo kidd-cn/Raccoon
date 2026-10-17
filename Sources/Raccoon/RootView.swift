@@ -14,7 +14,7 @@ enum Module: String, CaseIterable, Identifiable {
         case .monitor: "gauge.with.needle"
         }
     }
-    static var availableCases: [Module] { [.cleanup] }
+    static var availableCases: [Module] { [.cleanup, .uninstall] }
     static var comingSoonCases: [Module] { allCases.filter { !availableCases.contains($0) } }
 }
 
@@ -22,22 +22,35 @@ struct RootView: View {
     let exclusions: ExclusionsStore
     // 手写 @State 展开(本机 CLT 工具链缺 libSwiftUIMacros.dylib,见 RaccoonApp.swift 注释)。
     private var _vm: State<ScanViewModel>
+    private var _uvm: State<UninstallViewModel>
     private var _selection: State<Module>
 
     var vm: ScanViewModel {
         get { _vm.wrappedValue }
         nonmutating set { _vm.wrappedValue = newValue }
     }
+    var uvm: UninstallViewModel {
+        get { _uvm.wrappedValue }
+        nonmutating set { _uvm.wrappedValue = newValue }
+    }
     var selection: Module {
         get { _selection.wrappedValue }
         nonmutating set { _selection.wrappedValue = newValue }
     }
 
+    @MainActor
     init(exclusions: ExclusionsStore) {
         self.exclusions = exclusions
+        let history = JSONHistoryStore()
+        let services = UninstallServices.make()
         _vm = State(wrappedValue: ScanViewModel(service: AppScanService(),
                                                 exclusions: exclusions,
-                                                history: JSONHistoryStore()))
+                                                history: history))
+        _uvm = State(wrappedValue: UninstallViewModel(discovery: services.discovery,
+                                                      locator: services.locator,
+                                                      orphanScanner: services.orphans,
+                                                      exclusions: exclusions,
+                                                      history: history))
         _selection = State(wrappedValue: .cleanup)
     }
 
@@ -60,8 +73,14 @@ struct RootView: View {
             .listStyle(.sidebar)
             .navigationTitle(loc("app.name"))
         } detail: {
-            CleanupHomeView(vm: vm)
-                .onAppear { vm.loadLastCleanup() }
+            // detail 按选择切换;两个模块各自持有状态机,互不干扰
+            switch selection {
+            case .uninstall:
+                UninstallHomeView(vm: uvm)
+            default:
+                CleanupHomeView(vm: vm)
+                    .onAppear { vm.loadLastCleanup() }
+            }
         }
     }
 }
