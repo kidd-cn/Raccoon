@@ -28,9 +28,9 @@ enum ScanFixtures {
 
     static func rule(id: String, path: String, category: RuleCategory = .system,
                      safety: SafetyLevel = .safe, include: [String]? = nil,
-                     exclude: [String]? = nil) -> CleanupRule {
+                     exclude: [String]? = nil, tool: String? = nil) -> CleanupRule {
         CleanupRule(id: id, category: category, safety: safety, path: path,
-                    include: include, exclude: exclude, action: nil, description: nil)
+                    include: include, exclude: exclude, action: nil, description: nil, tool: tool)
     }
 
     /// 进度事件累积器:Swift 6 禁止在 @Sendable 闭包里捕获可变局部变量,

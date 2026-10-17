@@ -170,7 +170,7 @@ import CleanKit
 
     @Test func snapshotRule_producesHitsFromLister() async throws {
         let rule = CleanupRule(id: "snap", category: .cautious, safety: .cautious, path: "~",
-                               include: nil, exclude: nil, action: .tmutilThin, description: nil)
+                               include: nil, exclude: nil, action: .tmutilThin, description: nil, tool: nil)
         let e = ScanEngine(deps: .init(protection: ProtectionStore(), runningBundleIDs: { [] },
                                        snapshots: MockSnapshots(listed: ["2026-10-13-120000", "2026-10-12-090000"])))
         let result = try await e.scan(rules: [rule])
@@ -220,5 +220,25 @@ import CleanKit
         #expect(link.sizeBytes == 0)
         #expect(!link.isDirectory)
         #expect(result.permissionSkippedCount == 0)
+    }
+
+    // 三期:rule.tool 必须随命中透传到 ScanHit,AI 页按它分组;缺省为 nil
+    @Test func engineCarriesRuleToolIntoHits() async throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory() + "raccoon-tool-\(UUID().uuidString)")
+            .resolvingSymlinksInPath().path   // /var 是 /private/var 的符号链接,先解引用
+        let fm = FileManager.default
+        try fm.createDirectory(atPath: root + "/with/sub", withIntermediateDirectories: true)
+        try Data(repeating: 0x41, count: 64).write(to: URL(fileURLWithPath: root + "/with/sub/f"))
+        try fm.createDirectory(atPath: root + "/without/sub", withIntermediateDirectories: true)
+        try Data(repeating: 0x41, count: 32).write(to: URL(fileURLWithPath: root + "/without/sub/f"))
+        defer { try? fm.removeItem(atPath: root) }
+        let rules = [
+            ScanFixtures.rule(id: "with-tool", path: root + "/with", tool: "cursor"),
+            ScanFixtures.rule(id: "no-tool", path: root + "/without"),
+        ]
+        let result = try await ScanEngine(deps: .init(protection: ProtectionStore())).scan(rules: rules)
+        let byRule = Dictionary(grouping: result.hits, by: \.ruleID)
+        #expect(byRule["with-tool"]?.allSatisfy { $0.tool == "cursor" } == true)
+        #expect(byRule["no-tool"]?.allSatisfy { $0.tool == nil } == true)
     }
 }

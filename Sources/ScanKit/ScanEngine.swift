@@ -101,7 +101,7 @@ public struct ScanEngine: Sendable {
             ScanHit(ruleID: rule.id, category: rule.category, safety: rule.safety,
                     path: "tmutil://\(date)", sizeBytes: 0, isDirectory: false,
                     bundleID: nil, appName: nil, isAppRunning: false,
-                    action: .tmutilThin, snapshotDate: date)
+                    action: .tmutilThin, snapshotDate: date, tool: rule.tool)
         })
     }
 
@@ -133,7 +133,7 @@ public struct ScanEngine: Sendable {
                                             path: full, sizeBytes: 0, isDirectory: false,
                                             bundleID: bid, appName: nil,
                                             isAppRunning: bid.map { running.contains($0) } ?? false,
-                                            action: .trash, snapshotDate: nil))
+                                            action: .trash, snapshotDate: nil, tool: rule.tool))
                 continue
             }
             guard fm.isReadableFile(atPath: full) else { outcome.permissionSkipped += 1; continue }
@@ -147,7 +147,7 @@ public struct ScanEngine: Sendable {
                                         path: full, sizeBytes: size, isDirectory: childIsDir.boolValue,
                                         bundleID: bid, appName: nil,
                                         isAppRunning: bid.map { running.contains($0) } ?? false,
-                                        action: .trash, snapshotDate: nil))
+                                        action: .trash, snapshotDate: nil, tool: rule.tool))
         }
         return outcome
     }
@@ -167,7 +167,7 @@ public struct ScanEngine: Sendable {
             return ScanHit(ruleID: hit.ruleID, category: hit.category, safety: hit.safety,
                            path: hit.path, sizeBytes: hit.sizeBytes, isDirectory: hit.isDirectory,
                            bundleID: hit.bundleID, appName: name, isAppRunning: hit.isAppRunning,
-                           action: hit.action, snapshotDate: hit.snapshotDate)
+                           action: hit.action, snapshotDate: hit.snapshotDate, tool: hit.tool)
         }
     }
 
@@ -239,7 +239,7 @@ public struct ScanEngine: Sendable {
                                                 path: full, sizeBytes: 0, isDirectory: false,
                                                 bundleID: bid, appName: nil,
                                                 isAppRunning: bid.map { running.contains($0) } ?? false,
-                                                action: .trash, snapshotDate: nil))
+                                                action: .trash, snapshotDate: nil, tool: rule.tool))
                     continue
                 }
                 guard fm.isReadableFile(atPath: full) else { outcome.permissionSkipped += 1; continue }
@@ -254,7 +254,7 @@ public struct ScanEngine: Sendable {
                                             path: full, sizeBytes: size, isDirectory: isDir,
                                             bundleID: bid, appName: nil,
                                             isAppRunning: bid.map { running.contains($0) } ?? false,
-                                            action: .trash, snapshotDate: nil))
+                                            action: .trash, snapshotDate: nil, tool: rule.tool))
                 if isDir { en.skipDescendants() }   // 整目录删除,内部不再列举
                 continue
             }
