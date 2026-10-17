@@ -3096,5 +3096,6 @@ Task 14 文档已按文档审修订;文档按第二轮质量审修订了 15.4 �
 - **安全自查**:`grep -rn "removeItem\|unlink" Sources` 仅命中 `Sources/CleanKit/TrashService.swift:18` 注释(无实现调用,`removeItem` 零命中);`trashItem` 唯一实现在 `TrashService.swift:21`;`Sources/UninstallKit` 无 `NSHomeDirectory()`;无 AuthorizationExecute/SMJobBless/sudo/NSAppleScript 等提权模式。
 - **整体终审**(独立审查 `git diff main...HEAD`):无 Critical、无越界删除、无提权、无 trash-only 破口;四道门与收敛主链路成立。发现 1 条 Important(详情页关联数据无加载态,假空态且确认项数可漂移)及若干 Minor。
 - **修复**:`c9ae1ff` 增加 `isLoadingLeftovers` + 提交快照、报告页返回入口、Group Containers 大小写折叠、`scanOrphans` 的 `hasDiscovered` 守卫、详情路径展示、位置目录符号链接最严分级;新增 8 个测试。终审者复验 **REVIEW: ✅ 可合并**,余项为低可达性防御性缺口,已记入 QA 清单「已知测试缺口」。
-- **未做**:真机人工 QA(见 QA 清单 M1–M8/H1–H5);CI 未在 `feat/phase2` 运行(无 upstream、未推送),不得标绿;未 push/merge。
+- **未做**:真机人工 QA(见 QA 清单 M1–M8/H1–H5)。
+- **合并与 CI**:已快进合并到 `main` 并推送(`827c3c0`);`main` CI run `39017706933` 实测绿(构建/测试/L10n 键集)。`feat/phase2` 分支本身未单独跑 CI。
 
