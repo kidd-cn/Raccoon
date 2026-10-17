@@ -1,7 +1,7 @@
 import Foundation
 
 public enum RuleCategory: String, Codable, Sendable, CaseIterable, Identifiable {
-    case system, dev, apps, cautious
+    case system, dev, apps, ai, cautious
     public var id: String { rawValue }
 }
 

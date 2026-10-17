@@ -58,4 +58,72 @@ import CleanKit
             }
         }
     }
+
+    // —— 三期:AI 规则不变量 ——
+
+    @Test func bundledRulesAIRulesPresent() throws {
+        let lr = try RuleStore().loadBundled()
+        let ids = Set(lr.rules.map(\.id))
+        for expected in ["ai.claude-desktop", "ai.claude-desktop-app-cache", "ai.claude-desktop-updater",
+                         "ai.claude-code-cache", "ai.claude-code-snapshots", "ai.claude-code-telemetry",
+                         "ai.claude-code-plugin-cache", "ai.cursor", "ai.cursor-app-cache",
+                         "ai.cursor-compile-cache", "ai.codex-cli-cache", "ai.codex-runtimes",
+                         "ai.ollama-logs", "ai.ollama-models", "ai.huggingface-hub", "ai.chatgpt-cache"] {
+            #expect(ids.contains(expected), "缺少 AI 规则 \(expected)")
+        }
+    }
+
+    // AI 页按 tool 分组:ai 规则必须带非空 tool(既有「其他」组仅为防御兜底,不是豁免)
+    @Test func aiRulesHaveNonEmptyTool() throws {
+        let lr = try RuleStore().loadBundled()
+        for rule in lr.rules where rule.category == .ai {
+            #expect(rule.tool?.isEmpty == false, "\(rule.id) 缺非空 tool,AI 页分组依赖它")
+        }
+    }
+
+    // 用户数据整棵目录只允许以精确子路径为根;~/.claude、~/.ollama 本体永不作根(spec §5)
+    @Test func aiRuleRootsAreNotUserDataDirectories() throws {
+        let lr = try RuleStore().loadBundled()
+        let home = ProtectionStore.normalize("~")
+        let forbidden = [home + "/.claude", home + "/.ollama"]
+        for rule in lr.rules where rule.category == .ai {
+            #expect(!forbidden.contains(ProtectionStore.normalize(rule.path)),
+                    "\(rule.id) 规则根不得为整棵用户数据目录(只允许精确子路径)")
+        }
+    }
+
+    // 任何规则(不止 ai)不得以沙盒容器本体为根(spec §5 永不列出;子路径如微信缓存先例允许)
+    @Test func noRuleRootsAtSandboxContainerItself() throws {
+        let lr = try RuleStore().loadBundled()
+        let prefix = ProtectionStore.normalize("~/Library/Containers") + "/"
+        for rule in lr.rules {
+            let std = ProtectionStore.normalize(rule.path)
+            guard std.hasPrefix(prefix) else { continue }
+            #expect(std.dropFirst(prefix.count).contains("/"),
+                    "\(rule.id) 不得以容器本体 ~/Library/Containers/<id> 为根")
+        }
+    }
+
+    // 「永不列出」清单:不得作规则根;include 全树 glob 也不得指向这些名字(spec §5,防未来误加)
+    @Test func neverListedPathsAreNotRootsOrIncludes() throws {
+        let lr = try RuleStore().loadBundled()
+        let home = ProtectionStore.normalize("~")
+        let neverRoots: Set<String> = [
+            home + "/.claude/projects", home + "/.claude/skills", home + "/.claude/file-history",
+            home + "/.claude/todos", home + "/.claude/statsig", home + "/.claude/downloads",
+            home + "/.claude/history.jsonl",
+            home + "/Library/Application Support/Cursor/User",
+            home + "/Library/Application Support/Cursor/AgentStores",
+        ]
+        let neverIncludeNames: Set<String> = ["user", "agentstores", "projects", "skills",
+                                              "file-history", "todos", "statsig", "downloads", "history.jsonl"]
+        for rule in lr.rules {
+            #expect(!neverRoots.contains(ProtectionStore.normalize(rule.path)),
+                    "\(rule.id) 把「永不列出」路径当规则根")
+            for inc in rule.include ?? [] {
+                #expect(!neverIncludeNames.contains(inc.lowercased()),
+                        "\(rule.id) 的 include「\(inc)」命中永不列出的名字")
+            }
+        }
+    }
 }

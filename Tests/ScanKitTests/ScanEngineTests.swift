@@ -180,6 +180,7 @@ import CleanKit
         #expect(first.action == .tmutilThin)
         #expect(first.cleanItem.action == .tmutilThin(date: "2026-10-13-120000"))
         #expect(first.category == .cautious)
+        #expect(first.tool == nil)   // 快照规则不归属任何 AI 工具
     }
 
     // Task 7 质量 Minor 1:悬空符号链接是清理目标,应 0 字节收录,不落 permissionSkipped
@@ -231,14 +232,18 @@ import CleanKit
         try Data(repeating: 0x41, count: 64).write(to: URL(fileURLWithPath: root + "/with/sub/f"))
         try fm.createDirectory(atPath: root + "/without/sub", withIntermediateDirectories: true)
         try Data(repeating: 0x41, count: 32).write(to: URL(fileURLWithPath: root + "/without/sub/f"))
+        try fm.createDirectory(atPath: root + "/app/Cache", withIntermediateDirectories: true)
+        try Data(repeating: 0x41, count: 16).write(to: URL(fileURLWithPath: root + "/app/Cache/blob"))
         defer { try? fm.removeItem(atPath: root) }
         let rules = [
             ScanFixtures.rule(id: "with-tool", path: root + "/with", tool: "cursor"),
             ScanFixtures.rule(id: "no-tool", path: root + "/without"),
+            ScanFixtures.rule(id: "inc-tool", path: root + "/app", include: ["Cache"], tool: "claude-desktop"),
         ]
         let result = try await ScanEngine(deps: .init(protection: ProtectionStore())).scan(rules: rules)
         let byRule = Dictionary(grouping: result.hits, by: \.ruleID)
         #expect(byRule["with-tool"]?.allSatisfy { $0.tool == "cursor" } == true)
         #expect(byRule["no-tool"]?.allSatisfy { $0.tool == nil } == true)
+        #expect(byRule["inc-tool"]?.allSatisfy { $0.tool == "claude-desktop" } == true)   // include 模式同样透传
     }
 }

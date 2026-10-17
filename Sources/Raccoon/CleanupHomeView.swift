@@ -120,6 +120,7 @@ struct CategoryCardView: View {
         case .system: "trash"
         case .dev: "hammer"
         case .apps: "app.badge"
+        case .ai: "brain"
         case .cautious: "exclamationmark.shield"
         }
     }
