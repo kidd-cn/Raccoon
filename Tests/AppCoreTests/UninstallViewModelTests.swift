@@ -200,28 +200,26 @@ final class UninstallViewModelTests {
         #expect(vm.remainingCount == 1)
     }
 
-    // 取消发现后 task 句柄必须复位,否则后续 startDiscovery(含 force)被永久挡住。
+    // 取消发现后 task 句柄必须复位,且 hasDiscovered 必须复位——否则后续非 force
+    // startDiscovery 会被短路,根本没有真正重跑(用调用计数钉住)。
     @Test func cancelledDiscoveryResetsTaskAndAllowsRetry() async {
-        struct CancellingDiscovering: AppDiscovering {
-            func discover(exclusions: [String],
-                          progress: @Sendable (AppDiscoveryProgress) -> Void) async throws -> AppDiscoveryResult {
-                _ = withUnsafeCurrentTask { $0?.cancel() }
-                return AppDiscoveryResult(apps: [], unreadableCount: 0)
-            }
-        }
+        let counter = CallCounter()
         let vm = UninstallViewModel(
-            discovery: CancellingDiscovering(),
+            discovery: CancelFirstDiscovering(counter: counter),
             locator: FakeLeftoverLocating(map: [:]),
             orphanScanner: FakeOrphanScanning(result: .init(orphans: [], failedLocationIDs: [])),
             exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "uvm-\(UUID().uuidString)")!),
             history: history, trash: MockTrash(outcome: .trashed), home: home)
+
         vm.startDiscovery()
         await vm.discoveryTask?.value
+        #expect(await counter.count == 1)
         #expect(vm.discoveryTask == nil)
         #expect(vm.phase == .list)
 
-        vm.startDiscovery()   // 取消后非 force 也能重试
+        vm.startDiscovery()          // 必须真的重跑(而不是被 hasDiscovered 短路)
         await vm.discoveryTask?.value
+        #expect(await counter.count == 2)
         #expect(vm.phase == .list)
     }
 
@@ -282,5 +280,20 @@ final class UninstallViewModelTests {
         let vm = makeVM()
         vm.loadLastCleanup()
         #expect(vm.lastCleanup?.freedBytes == 2)
+    }
+}
+
+actor CallCounter {
+    private(set) var count = 0
+    func increment() -> Int { count += 1; return count }
+}
+
+struct CancelFirstDiscovering: AppDiscovering {
+    let counter: CallCounter
+    func discover(exclusions: [String],
+                  progress: @Sendable (AppDiscoveryProgress) -> Void) async throws -> AppDiscoveryResult {
+        let n = await counter.increment()
+        if n == 1 { _ = withUnsafeCurrentTask { $0?.cancel() } }
+        return AppDiscoveryResult(apps: [], unreadableCount: 0)
     }
 }
