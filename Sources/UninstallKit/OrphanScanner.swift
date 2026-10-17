@@ -25,6 +25,9 @@ public struct OrphanScanner: OrphanScanning {
         let protection = ProtectionStore(userExclusions: exclusions)
         let library = home.appendingPathComponent("Library", isDirectory: true)
         let installedNames = Set(installedAppNames.map(Self.normalizedName))
+        // Bundle ID 匹配大小写不敏感:已安装集合与磁盘目录大小写形态不一致时,
+        // 若按大小写敏感比较会把已安装应用的残留误判为孤儿(并默认勾选 regenerable)。
+        let installedIDsLower = Set(installedBundleIDs.map { $0.lowercased() })
         var orphans: [AppLeftover] = []
         var seen = Set<String>()
         var failed = Set<String>()
@@ -71,10 +74,18 @@ public struct OrphanScanner: OrphanScanning {
                     if candidates.contains(where: { $0.lowercased().hasPrefix("com.apple.") }) {
                         continue
                     }
-                    if candidates.contains(where: { installedBundleIDs.contains($0) }) { continue }
+                    if candidates.contains(where: { installedIDsLower.contains($0.lowercased()) }) {
+                        continue
+                    }
+                    // 保守方向:原形态与小写形态都向 LaunchServices 求证,任一可解析即视为已安装。
                     var resolvable = false
+                    var queried = Set<String>()
                     for candidate in candidates {
-                        if await resolver.isResolvable(candidate) { resolvable = true; break }
+                        for probe in [candidate, candidate.lowercased()]
+                        where queried.insert(probe).inserted {
+                            if await resolver.isResolvable(probe) { resolvable = true; break }
+                        }
+                        if resolvable { break }
                     }
                     guard !resolvable else { continue }
                     // 去重先于 FileSize:大小写不敏感,重复条目不白算大小。
@@ -114,7 +125,8 @@ public struct OrphanScanner: OrphanScanning {
         case .exact, .groupContainer:
             return isReverseDNS(name) ? name : nil
         case .exactSuffixed(let suffix):
-            guard name.hasSuffix(suffix) else { return nil }
+            // 后缀匹配大小写不敏感,但仍按原字符串与 suffix 长度截断后做反向域名校验。
+            guard name.lowercased().hasSuffix(suffix.lowercased()) else { return nil }
             let id = String(name.dropLast(suffix.count))
             return isReverseDNS(id) ? id : nil
         case .appName:

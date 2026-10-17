@@ -117,13 +117,12 @@ final class OrphanScannerTests {
 
     @Test func scansThroughInternalLocationSymlink() async throws {
         // Caches 指向库内真实目录:路径枚举应穿透并扫描,而不是静默跳过
-        let real = try home.makeDir("Library/RealCaches/com.gone.app", bytes: 6)
+        try home.makeDir("Library/RealCaches/com.gone.app", bytes: 6)
         try FileManager.default.createSymbolicLink(
             at: home.url.appendingPathComponent("Library/Caches"),
             withDestinationURL: home.url.appendingPathComponent("Library/RealCaches"))
         let result = await scan()
         #expect(result.orphans.map(\.path) == [home.url.appendingPathComponent("Library/Caches/com.gone.app").path])
-        _ = real
     }
 
     @Test func honorsResolvedFormExclusionForSymlinkedEntry() async throws {
@@ -136,13 +135,53 @@ final class OrphanScannerTests {
         #expect(result.orphans.isEmpty)
     }
 
-    @Test func dedupesOverlappingSuffixAndExactPathsCaseInsensitively() async throws {
-        // 防御性:同一规范化路径(大小写不敏感)只应出现一次(位置表未来若出现重叠也不会双列)
+    @Test func installedBundleIDMatchingIsCaseInsensitive() async throws {
+        // 第一段顺带防御性覆盖 `seen` 去重:同一规范化路径(大小写不敏感)只应出现一次
+        // (当前位置表下重叠不可达,为未来位置表演进保留)。
         try home.makeDir("Library/Caches/com.gone.app", bytes: 1)
         let first = await scan()
         #expect(first.orphans.count == 1)
+        // 已安装集合大小写变体必须匹配磁盘上的 Bundle ID,否则已安装应用的残留会被
+        // 误判为孤儿并获得 regenerable 默认勾选。
         let again = await scan(installedIDs: ["COM.GONE.APP"])
-        // 大小写不同的已安装集合不匹配 Bundle ID 字典(大小写敏感是 Bundle ID 语义),仍为 1 条
-        #expect(again.orphans.count == 1)
+        #expect(again.orphans.isEmpty)
+    }
+
+    @Test func installedBundleIDCaseVariantIsNotOrphan() async throws {
+        try home.makeDir("Library/Caches/com.alive.app", bytes: 1)
+        let result = await scan(installedIDs: ["COM.ALIVE.APP"])
+        #expect(result.orphans.isEmpty)
+    }
+
+    @Test func suffixMatchingIsCaseInsensitive() async throws {
+        let saved = try home.makeDir("Library/Saved Application State/com.gone.app.SAVEDSTATE", bytes: 2)
+        let plist = try home.makeFile("Library/LaunchAgents/com.gone.app.PLIST", bytes: 3)
+        let result = await scan()
+        #expect(Set(result.orphans.map(\.path)) == [saved.path, plist.path])
+    }
+
+    @Test func teamPrefixedAppleGroupContainerIsNotOrphan() async throws {
+        try home.makeDir("Library/Group Containers/TEAMID.com.apple.Safari", bytes: 1)
+        let result = await scan()
+        #expect(result.orphans.isEmpty)
+    }
+
+    @Test func installedNameWithAppSuffixIsNotLowConfidenceOrphan() async throws {
+        try home.makeDir("Library/Application Support/Foo", bytes: 1)
+        let result = await scan(installedNames: ["Foo.app"])
+        #expect(result.orphans.isEmpty)
+    }
+
+    @Test func recordsFailedLocationWhenEnumerationFails() async throws {
+        try home.makeFile("Library/Caches", bytes: 1)   // 位置目录是普通文件 → 枚举抛错
+        final class Box: @unchecked Sendable { var last: OrphanScanProgress? }
+        let box = Box()
+        let scanner = OrphanScanner(home: home.url, resolver: Resolver())
+        let result = await scanner.scan(installedBundleIDs: [], installedAppNames: [], exclusions: []) {
+            box.last = $0
+        }
+        #expect(result.failedLocationIDs == ["caches"])
+        #expect(result.orphans.isEmpty)
+        #expect(box.last?.completedLocations == LeftoverLocations.all.count)
     }
 }
