@@ -79,6 +79,47 @@ final class LeftoverLocatorTests {
         #expect(await leftovers(app()).isEmpty)
     }
 
+    @Test func rejectsBundleIDPathTraversalAcrossLocations() async throws {
+        try home.makeDir("Library/Containers/com.victim.app", bytes: 1)
+        let found = await leftovers(app(bundleID: "../Containers/com.victim.app"))
+        #expect(found.isEmpty)   // 否则会被标成 caches/regenerable 默认勾选
+    }
+
+    @Test func rejectsAppNamePathTraversalAcrossLocations() async throws {
+        try home.makeDir("Library/Containers/com.victim.app", bytes: 1)
+        let found = await leftovers(app(name: "../Containers/com.victim.app"))
+        #expect(found.isEmpty)
+    }
+
+    @Test func dedupesCaseVariantsPointingToSameEntry() async throws {
+        try home.makeDir("Library/Application Support/com.example.foo", bytes: 3)
+        let found = await leftovers(app(name: "COM.EXAMPLE.FOO"))
+        #expect(found.count == 1)   // 大小写不敏感卷上同一物理目录只出一次
+    }
+
+    @Test func honorsResolvedFormExclusionUnderInternalSymlink() async throws {
+        // 祖先链接仍在 Library 内,隔离「解析形态排除」;若只查原始形态,排除不生效
+        let real = try home.makeDir("Library/RealCaches/com.example.foo", bytes: 7)
+        try home.makeDir("Library/Logs/other", bytes: 0)          // 确保 Library 存在
+        try FileManager.default.createSymbolicLink(
+            at: home.url.appendingPathComponent("Library/Caches"),
+            withDestinationURL: home.url.appendingPathComponent("Library/RealCaches"))
+        let resolvedCandidate = real.path
+        let found = await leftovers(app(), exclusions: [resolvedCandidate])
+        #expect(found.isEmpty)
+    }
+
+    @Test func skipsLocationWhoseResolvedDirEscapesLibrary() async throws {
+        let outside = try home.makeDir("outside-target", bytes: 0)
+        try home.makeDir("outside-target/com.example.foo", bytes: 5)
+        try home.makeDir("Library/Logs/other", bytes: 0)          // 确保 Library 存在
+        try FileManager.default.createSymbolicLink(
+            at: home.url.appendingPathComponent("Library/Caches"),
+            withDestinationURL: outside)
+        let found = await leftovers(app())
+        #expect(found.isEmpty)
+    }
+
     @Test func scopeOnlyAllowsDirectChildrenOfKnownFolders() {
         let scope = LeftoverScope(home: home.url)
         let library = home.url.appendingPathComponent("Library").path
