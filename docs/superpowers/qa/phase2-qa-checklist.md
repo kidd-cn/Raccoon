@@ -82,20 +82,34 @@
 
 ### M1. 卸载一个真实测试应用:本体与勾选数据进废纸篓、可放回;userData 默认未勾 — ⏳ 待人工
 
-- 步骤:准备一个可弃用的测试应用(或复制一个自建 `.app` 到 `~/Applications`)→ 打开「卸载」模块 → 进入该应用详情 → 观察默认勾选 → 点「卸载…」→ 确认弹窗核对总项数与字节 → 点卸载。
-- 预期:应用本体固定参与提交;仅「精确归属 + 可再生」默认勾选;`Application Support` 等 userData 默认未勾;废纸篓中出现本体与已勾选数据;逐个「放回」后能恢复原路径;未勾选的 userData 原样留在磁盘。
+- **造数步骤**:
+  1. 准备一个自建测试 `.app`(Bundle ID 如 `com.example.raccoon-test`),放入 `~/Applications`;先运行一次,确保 LaunchServices 有记录。
+  2. 手工创建两个关联数据目录/文件:
+     - `mkdir -p ~/Library/Caches/com.example.raccoon-test && printf 'cache' > ~/Library/Caches/com.example.raccoon-test/test-cache.bin`
+     - `mkdir -p "$HOME/Library/Application Support/com.example.raccoon-test" && printf 'userdata' > "$HOME/Library/Application Support/com.example.raccoon-test/test-userdata.bin"`
+  3. 打开「卸载」→ 进入该应用详情,确认 **Caches 与 Application Support 两组条目都出现**。
+- 操作:观察默认勾选 → 点「卸载…」→ 确认弹窗核对总项数与字节 → 点卸载。
+- 预期:应用本体固定参与提交;**Caches 项默认勾选,Application Support 项默认不勾**;废纸篓中出现本体与 Caches 项;逐个「放回」后能恢复原路径;未勾的 userData 仍在磁盘,并在报告「剩余项」/列表口径中体现。
 - 自动半段见 A2/A3,不能替代本项。
 
 ### M2. 卸载后列表即时移除;本体/残留被跳过时留在列表并显示原因 — ⏳ 待人工
 
-- 步骤:完成一次成功卸载 → 观察返回列表后的应用集合;再对一个被占用/权限受限的测试应用执行卸载,或在 trash 阶段制造跳过。
-- 预期:成功时该应用立即从列表消失;本体被跳过时应用仍在列表;报告页「跳过」区显示路径与原因;残留被跳过时仍留在剩余项中。
+- 步骤:
+  1. 完成一次成功卸载(按 M1 造数)→ 观察返回列表后的应用集合。
+  2. **可复现跳过法**:在 `~/Applications` 下的测试应用副本上操作,对某个已勾选的残留目录(或测试应用副本本身)执行 `chflags uchg <path>`(或 `chmod 000 <path>`)→ 执行卸载。
+  3. 验证后恢复:`chflags nouchg <path>` / `chmod 755 <path>`。
+- 预期:成功时该应用立即从列表消失;触发跳过时应用仍在列表;报告页「跳过」区显示路径与原因;残留被跳过时仍留在剩余项中。
+- 更稳妥:优先在 `~/Applications` 的测试副本上制造跳过,避免影响真实应用。
 - 自动半段见 A3/A4。
 
 ### M3. 残留扫描在真机发现真实无主残留,分组与失败位置展示正确 — ⏳ 待人工
 
-- 步骤:先正常卸载一个会留下 `~/Library/Caches` / `Application Support` 数据的测试应用(或手动制造一个反向域名的无主目录)→ 打开「卸载」→「孤儿残留」页 → 点扫描。
-- 预期:扫描完成后出现真实无主残留;「已确认归属(高置信)」与「未确认归属」分组正确;未确认项默认不勾选;若某已知位置不可枚举,底部以**目录名**显示失败位置;空库时显示空态。
+- **造数步骤**:
+  1. 创建无主残留:`mkdir -p ~/Library/Caches/com.example.nonexistent-raccoon-test && printf 'orphan' > ~/Library/Caches/com.example.nonexistent-raccoon-test/test-orphan.bin`。
+  2. 打开「卸载」→「孤儿残留」→ 扫描;该目录应归入「已确认归属(高置信)」组。
+  3. **失败位置**:临时执行 `chmod 000 ~/Library/Caches` 制造枚举失败 → 重新扫描 → 确认底部失败位置以目录名(如 `Caches`)展示 → 恢复 `chmod 755 ~/Library/Caches`。
+  4. 空态:删除第 1 步造数目录后复扫,应显示空态。
+- 预期:真实无主残留出现;「已确认归属(高置信)」与「未确认归属」分组正确;未确认项默认不勾选;失败位置以目录名展示;空库时显示空态。
 - 自动半段见 A4/A10。
 
 ### M4. 应用运行中标识与确认弹窗警告 — ⏳ 待人工
@@ -107,7 +121,8 @@
 ### M5. 中英切换、浅/深色下新页面无破版;空态/搜索/长路径截断 — ⏳ 待人工
 
 - 步骤:分别在中文/英文、浅色/深色下走「卸载列表 → 应用详情 → 孤儿残留 → 确认弹窗 → 报告页」;测试空搜索、无匹配搜索、超长路径行。
-- 预期:文案完整不截断、无重叠/溢出;长路径以中间截断显示;空态与搜索无结果提示可读;分组标题与标签对比度足够。
+- 语言切换命令(同一期):`defaults write com.raccooncleaner.Raccoon AppleLanguages -array en` → 重启应用应显示英文;`defaults delete com.raccooncleaner.Raccoon AppleLanguages` → 重启恢复中文。
+- 预期:文案完整不截断、无重叠/溢出;长路径以中间截断显示;空态与搜索无结果提示可读;分组标题与标签对比度足够;**应用详情与孤儿页均不出现 `~/Library/Preferences`、`~/Library/Cookies` 条目**。
 - 自动半段:L10n 键集 93:93(见混合项 H1),不代表视觉无破版。
 
 ### M6. `LeftoverRow` 点 Toggle 与点行空白处各只切换一次 — ⏳ 待人工
@@ -146,8 +161,8 @@
 
 ### H4. 确认弹窗快捷键:⏎ 触发取消、Esc 触发取消、破坏性按钮只能点按 — 混合
 
-- ✅ 自动半段(仅代码锚点):`UninstallConfirmView.swift:45` 取消按钮 `.defaultAction`、`:52` `.onExitCommand`;一期 `ConfirmCleanView.swift:37,42` 同步修复。Return 在实现期曾以事件探针验证,但仓库内无对应自动化测试。
-- ⏳ 人工半段:在卸载与孤儿确认弹窗中分别按 Return、Esc,并尝试键盘聚焦「卸载/清理」按钮回车。预期两键均只关闭弹窗、不执行删除;破坏性动作只能鼠标点按。Esc 必须真机确认。
+- ✅ 自动半段(仅代码锚点):`UninstallConfirmView.swift:45` 取消按钮 `.defaultAction`、`:52` `.onExitCommand`;一期 `ConfirmCleanView.swift:37,42` 同步修复。
+- ⏳ 人工半段:在卸载与孤儿确认弹窗中分别按 Return、Esc,并尝试键盘聚焦「卸载/清理」按钮回车。预期两键均只关闭弹窗、不执行删除;破坏性动作只能鼠标点按。**Return 的事件探针仅是实施期一次性证据,不在仓库、不可复现,不作为验收依据;Return 与 Esc 都必须真机复核。**
 
 ### H5. 报告页「返回列表」与「扫描残留…」路径 — 混合
 
@@ -157,9 +172,33 @@
 ## 已知测试缺口(诚实记录)
 
 1. **二期清理进度中间态无专测**:`UninstallViewModel.swift:190,198` 已回投 `cleanProgress`,但无测试像一期 `cleanSelected_reportsProgress` 那样断言卸载/孤儿清理的逐项中间态。计划文档已列为可选强化(3 项 + 门控 trash,断言中途 `done == 1`)。
-2. **确认弹窗快捷键无仓库内自动化测试**:Return 的实现期事件探针结论不在版本库中;Esc 与「破坏性按钮仅点按」只能由 H4 真机确认。
+2. **确认弹窗快捷键无仓库内自动化测试**:Return 的事件探针是实施期一次性证据,不在仓库、不可复现,不作为验收依据;Return 与 Esc 都必须由 H4 真机复核,破坏性按钮应只能点按。
 3. **`LeftoverRow` 双触发**:依赖 SwiftUI 控件优先权,无单测可覆盖,必须 M6 真机验证。
 4. **历史文件临时目录清理**:`HistoryStoreTests` 未显式清理临时目录,属测试卫生问题,不影响功能结论。
+
+## 已知限制
+
+引用 spec §8.4 与 §14:
+
+1. **`~/Library/Preferences`、`~/Library/Cookies`**:一期门 1 整棵保护,二期不列出这两处的关联数据;放开需改门 1(窄口豁免 + 回归测试),列为三期候选,二期不动安全模型。
+2. **系统级 `/Library` 残留与任何提权**:二期不做,不引入管理员授权;列为三期候选。
+3. **非标准位置不扫描**:仅扫描声明式位置表(§6)内的位置,表外一律不扫,不做全盘启发式。
+4. **非应用卸载路径**:Homebrew / CLI 工具等包管理不在二期范围。
+
+## §15 验收映射(spec §15.1–§15.8)
+
+> 状态口径同本文档:「✅」仅表示自动化可核验面有证据,不等于真机验收通过;「⏳」为纯人工;「混合」为自动半段 + 人工半段。
+
+| Done 条目 | 状态 | 对应清单项 | 证据/说明 |
+| --------- | ---- | ---------- | --------- |
+| 15.1 `swift run` 列出 `/Applications` 与 `~/Applications` 应用(排除 Apple/非应用),详情展示分级数据,`Preferences`/`Cookies` 不出现 | 混合 | A1 / A6 + M5 / M7 | 自动:发现过滤与去重(A1)、Preferences/Cookies 硬保护事实(A6);人工:M5 目视详情分组与两处不出现,M7 验证列表/详情导航。 |
+| 15.2 真实卸载:本体与勾选数据进废纸篓且可放回,报告数字一致,userData 分区默认不勾 | ⏳ 待人工 | M1 | 见 M1 造数与步骤。A2/A3 只证明默认勾选与提交口径,不替代废纸篓放回与数字目视。 |
+| 15.3 真机孤儿扫描发现真实无主残留,高置信/未确认分组正确,默认仅勾「高置信 + 可再生」 | 混合 | A4 / A5 + M3 | 自动:默认勾选、排序、跳过收敛与作用域(A4/A5);人工:M3 造数、分组与失败位置展示。 |
+| 15.4 全程无提权、无 `rm`/unlink;`CleanExecutor` 仍是唯一删除路径 | ✅ | A3 / A5 / A9 | `grep -rn "removeItem\|unlink" Sources` 无命中;唯一删除实现为 `Sources/CleanKit/TrashService.swift:21` 的 `FileManager.trashItem`;无提权代码模式(AuthorizationExecute/SMJobBless/sudo/NSAppleScript 等均无命中)。测试:`testClean_securityRegression_neverTrashesProtectedEvenIfInjected`(`Tests/CleanKitTests/CleanExecutorTests.swift:63`)、`testClean_aggregatesReport_andSkipsProtected`(:44)、`testFileManagerTrashService_trashesTempFile`(`Tests/CleanKitTests/TrashServiceTests.swift:21`)。 |
+| 15.5 四道门在二期路径有自动化锚点(硬保护、排除清单、分级、trash-only),恶意/越界用例回归 | ✅ | A1–A7 / A9 | 门 1:A6 + A5;门 2:A1/A2;门 3:A2/A4;门 4:见 15.4;恶意/越界:A5/A9。 |
+| 15.6 中英双语、浅色/深色适配 | 混合 | H1 / H2 + M5 | 自动:zh/en 各 93 键、键集 diff 为空;人工:H1/H2/M5 目视切换语言与外观。 |
+| 15.7 `Scripts/test.sh` 全绿、CI 绿、L10n 键集 1:1 | 混合 | H1 + 统计 | 本地 **175/175 全绿**、L10n **93:93** 已实测(H1 自动半段);**CI 未在 `feat/phase2` 运行(该分支无 upstream、尚未推送),待推送后验证,不得标绿**。 |
+| 15.8 README 与 QA 清单如实标注人工项与已知限制(§8.4、§14) | ✅ | 本文档 + README | README 新增「已知限制」段;本清单分列 ✅/⏳/混合,并在「已知测试缺口」记录未覆盖面。 |
 
 ## 统计
 

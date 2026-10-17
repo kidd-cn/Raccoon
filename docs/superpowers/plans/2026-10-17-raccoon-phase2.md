@@ -3085,5 +3085,7 @@ Task 1–13 已完成并通过逐任务规格审 + 质量审;Task 14 文档/QA �
 
 - 真机 QA:见 `docs/superpowers/qa/phase2-qa-checklist.md`(自动 10 项、待人工 8 项、混合 5 项)。
 - 可选测试强化:一期清理进度中间态(3 项 + 门控 trash,断言中途 `done == 1`);二期清理进度中间态同法补齐;`HistoryStoreTests` 临时目录清理。
-- 已知缺口:二期清理进度无专测断言中间态;确认弹窗 Esc 快捷键与 `LeftoverRow` 双触发需真机验证,详见 QA 清单「已知测试缺口」。
+- 已知缺口:二期清理进度无专测断言中间态;确认弹窗 Return/Esc 快捷键与 `LeftoverRow` 双触发需真机验证,详见 QA 清单「已知测试缺口」。
+
+Task 14 文档已按文档审修订;Task 15 终审随后执行并补充最终状态。
 
