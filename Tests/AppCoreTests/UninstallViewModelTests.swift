@@ -281,6 +281,96 @@ final class UninstallViewModelTests {
         vm.loadLastCleanup()
         #expect(vm.lastCleanup?.freedBytes == 2)
     }
+
+    // MARK: - 孤儿残留流
+
+    @Test func orphanScanDefaultsToHighConfidenceRegenerable() async {
+        let highRegen = leftover("Caches/com.gone.app", home: home)
+        let highUser = leftover("Application Support/com.gone.app", home: home,
+                                safety: .userData, locationID: "app-support")
+        let low = leftover("Application Support/Old App", home: home, safety: .userData,
+                           ownership: .appName, locationID: "app-support-name")
+        let vm = makeVM(orphans: .init(orphans: [highRegen, highUser, low], failedLocationIDs: ["containers"]))
+
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.scanOrphans()
+        #expect(vm.orphanPhase == .scanning)
+        await vm.orphanTask?.value
+
+        #expect(vm.orphanPhase == .results)
+        #expect(vm.orphans.count == 3)
+        #expect(vm.selectedOrphanPaths == [highRegen.path])
+        #expect(vm.failedLocationIDs == ["containers"])
+        #expect(vm.orphanProgress.totalLocations > 0)
+    }
+
+    @Test func cleanOrphansConvergesOnlyCleanedSubset() async {
+        let a = leftover("Caches/com.a.app", home: home)
+        let b = leftover("Caches/com.b.app", home: home)
+        let trash = MockTrash(outcome: .trashed, skippedFor: [b.path])
+        let vm = makeVM(orphans: .init(orphans: [a, b], failedLocationIDs: []), trash: trash)
+
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.scanOrphans(); await vm.orphanTask?.value
+        vm.selectedOrphanPaths = [a.path, b.path]
+        vm.requestCleanOrphans()
+        #expect(vm.confirmFlow == .orphans)
+        vm.cleanOrphans()
+        await vm.cleanTask?.value
+
+        #expect(vm.orphans.map(\.path) == [b.path])   // 跳过的仍在磁盘
+        #expect(vm.selectedOrphanPaths == [b.path])
+        guard case .report = vm.cleanState else { Issue.record("应为 report"); return }
+        #expect(vm.remainingCount == 1)
+        vm.returnFromReport()
+        #expect(vm.orphanPhase == .results)
+        #expect(vm.cleanState == nil)
+    }
+
+    @Test func cancelOrphanScanReturnsToIdle() async {
+        let vm = makeVM()
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.scanOrphans()
+        vm.cancelOrphanScan()
+        #expect(vm.orphanPhase == .idle)
+        await vm.orphanTask?.value
+        #expect(vm.orphanPhase == .idle)
+    }
+
+    // 与卸载流对称:越界项即便被默认勾选/手工选中,提交前必须被作用域白名单剔除。
+    @Test func orphanCleanDropsRogueLocatorItems() async {
+        let good = leftover("Caches/com.gone.app", home: home)
+        let roguePrefs = AppLeftover(
+            path: home.appendingPathComponent("Library/Preferences/com.gone.app.plist").path,
+            sizeBytes: 5, safety: .regenerable, ownership: .bundleID, locationID: "caches")
+        let rogueOutside = AppLeftover(
+            path: home.appendingPathComponent("Documents/com.gone.app").path,
+            sizeBytes: 6, safety: .regenerable, ownership: .bundleID, locationID: "caches")
+        let trash = MockTrash(outcome: .trashed)
+        let vm = makeVM(orphans: .init(orphans: [good, roguePrefs, rogueOutside], failedLocationIDs: []),
+                        trash: trash)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.scanOrphans(); await vm.orphanTask?.value
+        #expect(vm.selectedOrphanPaths == [good.path, roguePrefs.path, rogueOutside.path])
+        vm.requestCleanOrphans(); vm.cleanOrphans(); await vm.cleanTask?.value
+        #expect(await trash.calls == [good.path])
+    }
+
+    // 安全锚点:扫描必须带发现阶段的已安装集合,否则已安装应用的可再生残留会被误判为孤儿。
+    @Test func orphanScanPassesInstalledSetsFromDiscovery() async {
+        let app = makeTestApp(bundleID: "com.example.foo", name: "Foo", home: home)
+        let scanner = RecordingOrphanScanner(result: .init(orphans: [], failedLocationIDs: []))
+        let vm = UninstallViewModel(
+            discovery: FakeAppDiscovering(result: .init(apps: [app], unreadableCount: 0)),
+            locator: FakeLeftoverLocating(map: [:]),
+            orphanScanner: scanner,
+            exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "uvm-\(UUID().uuidString)")!),
+            history: history, trash: MockTrash(outcome: .trashed), home: home)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.scanOrphans(); await vm.orphanTask?.value
+        #expect(scanner.recordedIDs == ["com.example.foo"])
+        #expect(scanner.recordedNames == ["Foo"])
+    }
 }
 
 actor CallCounter {
@@ -295,5 +385,23 @@ struct CancelFirstDiscovering: AppDiscovering {
         let n = await counter.increment()
         if n == 1 { _ = withUnsafeCurrentTask { $0?.cancel() } }
         return AppDiscoveryResult(apps: [], unreadableCount: 0)
+    }
+}
+
+final class RecordingOrphanScanner: OrphanScanning, @unchecked Sendable {
+    let result: OrphanScanResult
+    private(set) var recordedIDs: Set<String> = []
+    private(set) var recordedNames: Set<String> = []
+    private(set) var recordedExclusions: [String] = []
+    init(result: OrphanScanResult) { self.result = result }
+    func scan(installedBundleIDs: Set<String>, installedAppNames: Set<String>,
+              exclusions: [String],
+              progress: @Sendable (OrphanScanProgress) -> Void) async -> OrphanScanResult {
+        recordedIDs = installedBundleIDs
+        recordedNames = installedAppNames
+        recordedExclusions = exclusions
+        progress(OrphanScanProgress(completedLocations: LeftoverLocations.all.count,
+                                    totalLocations: LeftoverLocations.all.count))
+        return result
     }
 }

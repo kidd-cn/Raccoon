@@ -228,6 +228,71 @@ public final class UninstallViewModel {
         if cleanFlow == .apps { detailAppID = nil }
     }
 
+    // MARK: - 孤儿残留
+
+    public var selectedOrphanItems: [AppLeftover] {
+        orphans.filter { selectedOrphanPaths.contains($0.path) }
+    }
+
+    public func toggleOrphan(_ path: String) {
+        if selectedOrphanPaths.contains(path) { selectedOrphanPaths.remove(path) }
+        else { selectedOrphanPaths.insert(path) }
+    }
+
+    public func selectAllOrphans() { selectedOrphanPaths = Set(orphans.map(\.path)) }
+    public func selectNoneOrphans() { selectedOrphanPaths = [] }
+
+    public func scanOrphans() {
+        guard orphanPhase != .scanning else { return }
+        orphanPhase = .scanning
+        orphans = []; selectedOrphanPaths = []; failedLocationIDs = []
+        orphanProgress = OrphanScanProgress(completedLocations: 0,
+                                            totalLocations: LeftoverLocations.all.count)
+        let ids = Set(apps.map(\.bundleID))
+        let names = Set(apps.map(\.name))
+        let exclusionsSnapshot = exclusions.exclusions
+        orphanTask = Task { [weak self] in
+            guard let self else { return }
+            let result = await self.orphanScanner.scan(
+                installedBundleIDs: ids,
+                installedAppNames: names,
+                exclusions: exclusionsSnapshot
+            ) { [weak self] p in
+                Task { @MainActor [weak self] in self?.orphanProgress = p }
+            }
+            guard !Task.isCancelled else { return }
+            self.orphans = result.orphans.sorted { $0.sizeBytes > $1.sizeBytes }
+            self.selectedOrphanPaths = Set(self.orphans
+                .filter { $0.ownership == .bundleID && $0.safety == .regenerable }
+                .map(\.path))
+            self.failedLocationIDs = result.failedLocationIDs
+            self.orphanPhase = .results
+        }
+    }
+
+    public func cancelOrphanScan() {
+        orphanTask?.cancel()
+        orphanPhase = .idle
+    }
+
+    public func requestCleanOrphans() {
+        guard cleanState == nil, !orphanCleanItems.isEmpty else { return }
+        confirmFlow = .orphans
+    }
+
+    public func cleanOrphans() {
+        guard confirmFlow == .orphans else { return }
+        let items = orphanCleanItems
+        guard !items.isEmpty else { return }
+        runClean(items, flow: .orphans)
+    }
+
+    private var orphanCleanItems: [CleanItem] {
+        selectedOrphanItems
+            .filter { scope.isAllowed($0.path) }
+            .map { CleanItem(path: $0.path, sizeBytes: $0.sizeBytes) }
+    }
+
     public var remainingBytes: Int64 {
         if cleanFlow == .apps {
             return leftovers.reduce(Int64(0)) { $0 + $1.sizeBytes }
