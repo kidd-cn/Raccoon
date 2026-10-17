@@ -258,7 +258,7 @@ public final class UninstallViewModel {
         let exclusionsSnapshot = exclusions.exclusions
         orphanTask = Task { [weak self] in
             guard let self else { return }
-            defer { self.orphanTask = nil }
+            defer { if gen == self.orphanScanGeneration { self.orphanTask = nil } }
             let result = await self.orphanScanner.scan(
                 installedBundleIDs: ids,
                 installedAppNames: names,

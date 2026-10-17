@@ -403,7 +403,7 @@ final class UninstallViewModelTests {
     }
 
     // 取消后仍在途的进度回调不得覆盖已复位/新一轮扫描的进度。
-    @Test func staleProgressAfterCancelIsIgnored() async {
+    @Test(.timeLimit(.minutes(1))) func staleProgressAfterCancelIsIgnored() async {
         let scanner = GatedOrphanScanner(result: .init(orphans: [], failedLocationIDs: []))
         let vm = UninstallViewModel(
             discovery: FakeAppDiscovering(result: .init(apps: [], unreadableCount: 0)),
@@ -426,7 +426,7 @@ final class UninstallViewModelTests {
         #expect(vm.orphanProgress.completedLocations == 0)   // 5 未被写入
     }
 
-    @Test func scanOrphansIsNoOpWhileScanning() async {
+    @Test(.timeLimit(.minutes(1))) func scanOrphansIsNoOpWhileScanning() async {
         let orphan = leftover("Caches/com.gone.app", home: home)
         let scanner = GatedOrphanScanner(result: .init(orphans: [orphan], failedLocationIDs: []))
         let vm = UninstallViewModel(
@@ -446,6 +446,43 @@ final class UninstallViewModelTests {
         #expect(scanner.scanCount == 1)
         #expect(vm.orphans.map(\.path) == [orphan.path])
         #expect(vm.orphanPhase == .results)
+    }
+
+    // 取消 A 后在途收尾不得清掉新一轮 B 的句柄,否则 B 无法被取消。
+    @Test(.timeLimit(.minutes(1))) func staleTaskCleanupDoesNotClearNewerScanHandle() async {
+        let scanner = MultiGatedOrphanScanner(
+            result: .init(orphans: [leftover("Caches/com.a.app", home: home)],
+                          failedLocationIDs: []))
+        let vm = UninstallViewModel(
+            discovery: FakeAppDiscovering(result: .init(apps: [], unreadableCount: 0)),
+            locator: FakeLeftoverLocating(map: [:]),
+            orphanScanner: scanner,
+            exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "uvm-\(UUID().uuidString)")!),
+            history: history, trash: MockTrash(outcome: .trashed), home: home)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+
+        vm.scanOrphans()                                   // A
+        await scanner.gate.waitUntilStarted(index: 1)
+        let a = vm.orphanTask
+        #expect(a != nil)
+
+        vm.cancelOrphanScan()                              // 取消 A
+        vm.scanOrphans()                                   // B
+        await scanner.gate.waitUntilStarted(index: 2)
+        #expect(vm.orphanTask != nil)
+        #expect(vm.orphanPhase == .scanning)
+
+        await scanner.gate.release(index: 1)               // 只放行 A
+        await a?.value
+        #expect(vm.orphanTask != nil)                       // 修复前被 A 的 defer 置 nil
+
+        let b = vm.orphanTask
+        vm.cancelOrphanScan()                              // 必须能取消 B
+        #expect(vm.orphanPhase == .idle)
+        await scanner.gate.release(index: 2)               // 放行 B 收尾,避免悬挂
+        await b?.value
+        #expect(await scanner.gate.calls == 2)
+        #expect(vm.orphanPhase == .idle)                    // B 的结果不落地
     }
 
     @Test func cleanOrphansIsGuardedWhileCleaning() async {
@@ -558,6 +595,56 @@ final class GatedOrphanScanner: OrphanScanning, @unchecked Sendable {
         scanCount += 1
         await gate.enter()
         progress(OrphanScanProgress(completedLocations: 5, totalLocations: 8))
+        return result
+    }
+}
+
+/// 按调用序号独立放行的 gate:用于「旧任务收尾 vs 新任务在途」的交错场景。
+actor MultiScanGate {
+    private(set) var calls = 0
+    private var started: Set<Int> = []
+    private var startedWaiters: [Int: CheckedContinuation<Void, Never>] = [:]
+    private var released: Set<Int> = []
+    private var resumeScans: [Int: CheckedContinuation<Void, Never>] = [:]
+
+    func nextIndex() -> Int {
+        calls += 1
+        return calls
+    }
+
+    func enter(index: Int) async {
+        started.insert(index)
+        if let waiter = startedWaiters.removeValue(forKey: index) { waiter.resume() }
+        if released.contains(index) { return }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            if released.contains(index) { continuation.resume() }
+            else { resumeScans[index] = continuation }
+        }
+    }
+
+    func waitUntilStarted(index: Int) async {
+        if started.contains(index) { return }
+        await withCheckedContinuation { continuation in
+            startedWaiters[index] = continuation
+        }
+    }
+
+    func release(index: Int) {
+        released.insert(index)
+        resumeScans.removeValue(forKey: index)?.resume()
+    }
+}
+
+final class MultiGatedOrphanScanner: OrphanScanning, @unchecked Sendable {
+    let result: OrphanScanResult
+    let gate = MultiScanGate()
+    init(result: OrphanScanResult) { self.result = result }
+    func scan(installedBundleIDs: Set<String>, installedAppNames: Set<String>,
+              exclusions: [String],
+              progress: @Sendable (OrphanScanProgress) -> Void) async -> OrphanScanResult {
+        let index = await gate.nextIndex()
+        await gate.enter(index: index)
+        progress(OrphanScanProgress(completedLocations: index, totalLocations: 8))
         return result
     }
 }
