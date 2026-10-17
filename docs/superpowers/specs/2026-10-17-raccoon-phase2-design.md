@@ -114,19 +114,22 @@ public struct OrphanScanProgress: Sendable {
 
 ### 5.1.1 注入接口(UninstallKit 对外边界)
 
-取消语义与一期 `ScanServicing` 对齐:接口不带「是否已取消」参数,调用方取消其 `Task`,实现内部检查 `Task.isCancelled` 并在下一个检查点返回/抛出。
+取消语义与一期 `ScanServicing` 对齐:接口不带「是否已取消」参数,调用方取消其 `Task`,实现内部检查 `Task.isCancelled` 并在下一个检查点返回/抛出。排除清单按调用传入(与一期扫描一致:每次动作取最新清单,实现内部重建 `ProtectionStore`)。
 
 ```swift
 public protocol AppDiscovering: Sendable {
-    func discover(progress: @Sendable (AppDiscoveryProgress) -> Void) async throws -> AppDiscoveryResult
+    func discover(exclusions: [String],
+                  progress: @Sendable (AppDiscoveryProgress) -> Void) async throws -> AppDiscoveryResult
 }
 
 public protocol LeftoverLocating: Sendable {
-    func leftovers(for app: InstalledApp) async -> [AppLeftover]
+    func leftovers(for app: InstalledApp, exclusions: [String]) async -> [AppLeftover]
 }
 
 public protocol OrphanScanning: Sendable {
     func scan(installedBundleIDs: Set<String>,
+              installedAppNames: Set<String>,
+              exclusions: [String],
               progress: @Sendable (OrphanScanProgress) -> Void) async -> OrphanScanResult
 }
 
@@ -211,6 +214,7 @@ public protocol RunningAppChecking: Sendable {
 ### 8.3 门 3:安全分级
 
 - `regenerable` → 明细页与残留页默认勾选;`userData` → 默认不勾、橙色标识、确认弹窗单独分区(沿用一期 `confirm.cautiousSection` 的形态,文案按二期重写)。
+- **默认勾选的完整口径 = 可再生 且 Bundle ID 精确归属**;「未确认归属」无论分级一律默认不勾(与 §7 同口径,名字匹配不足以授权删除)。
 - 应用本体**固定包含在清单内且不可取消**:卸载语义即「应用本体 + 已勾选的关联数据」。确认弹窗主按钮为「卸载并移入废纸篓」。
 - 运行中应用:列表与详情显示黄色「应用运行中」标识,确认弹窗顶部黄色警告;不硬性阻止(与一期运行中缓存的处理一致,由用户判断)。
 
