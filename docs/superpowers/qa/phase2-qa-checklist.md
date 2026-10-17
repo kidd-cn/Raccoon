@@ -6,77 +6,77 @@
 > - **⏳ 待人工**:需 GUI 交互或人眼判断,附操作步骤与预期。
 > - **混合**:自动半段与人工半段分列,自动半段不替人工半段背书。
 >
-> **实测基线(2026-10-17,分支 `feat/phase2`,HEAD `8cb571a`)**:
-> - `Scripts/test.sh` 全量 **175/175 绿**:UninstallKit **63** / ScanKit **40** / CleanKit **27** / AppCore **45**。
-> - 中英 L10n 各 **93** 键,键集 diff 为空(93:93 1:1)。
+> **实测基线(2026-10-17,分支 `feat/phase2`,HEAD `c9ae1ff`)**:
+> - `Scripts/test.sh` 全量 **183/183 绿**:UninstallKit **66** / ScanKit **40** / CleanKit **27** / AppCore **50**。
+> - 中英 L10n 各 **94** 键,键集 diff 为空(94:94 1:1)。
 > - 本文档所有「✅」均以该次实测为准;测试名已逐条 grep 确认存在,无编造。
 
 ## 一、✅ 自动核验项(10 项)
 
 ### A1. 应用发现:Apple 应用排除、一层子目录、同 ID 去重、符号链接越界跳过 — ✅
 
-- `findsTopLevelAndOneSubdirectoryLevel`(`Tests/UninstallKitTests/AppDiscoveryTests.swift:21`):应用根顶层与一层子目录被发现,更深层不进入结果。
-- `skipsAppleAppsAndMissingPlist`(同文件:36):`com.apple.*` 被排除;缺 `Info.plist` 的包计入不可读而非应用。
-- `dedupesSameBundleIDByRootOrder`(同文件:49):同一 Bundle ID 跨根只保留根顺序中的首个。
-- `skipsSymlinkEscapingRoot`(同文件:60):解析后逃出应用根的符号链接被跳过。
-- 补充:`followsSymlinkedRoot`(:100)、`skipsAppleBundleIDsCaseInsensitivelyAndCountsEmptyIDUnreadable`(:120)、`doesNotDescendIntoNestedAppBundles`(:140)、`ignoresPlainFileApp`(:111)。
+- `findsTopLevelAndOneSubdirectoryLevel`(`Tests/UninstallKitTests/AppDiscoveryTests.swift`):应用根顶层与一层子目录被发现,更深层不进入结果。
+- `skipsAppleAppsAndMissingPlist`(同文件):`com.apple.*` 被排除;缺 `Info.plist` 的包计入不可读而非应用。
+- `dedupesSameBundleIDByRootOrder`(同文件):同一 Bundle ID 跨根只保留根顺序中的首个。
+- `skipsSymlinkEscapingRoot`(同文件):解析后逃出应用根的符号链接被跳过。
+- 补充:`followsSymlinkedRoot`、`skipsAppleBundleIDsCaseInsensitivelyAndCountsEmptyIDUnreadable`、`doesNotDescendIntoNestedAppBundles`、`ignoresPlainFileApp`。
 
 ### A2. 关联数据分级与默认勾选:可再生勾、userData 不勾、未确认归属不勾 — ✅
 
-- `openDetailDefaultsToRegenerableExactOnly`(`Tests/AppCoreTests/UninstallViewModelTests.swift:53`):默认选择集仅含「精确归属(bundleID)+ 可再生」;userData 与名称匹配的低置信项均不勾。
-- `findsExactLocationsWithGrading`(`Tests/UninstallKitTests/LeftoverLocatorTests.swift:20`):各位置的归属精确度与安全分级正确。
-- `nameMatchIsLowConfidence`(同文件:55)、`groupContainerAcceptsTeamPrefixedName`(:49)、`dedupesSamePathByLocationIDOrder`(:63)。
-- 硬保护与用户排除不进定位结果:`excludesUserExclusionsAndHardProtectedPaths`(同文件:72)。
+- `openDetailDefaultsToRegenerableExactOnly`(`Tests/AppCoreTests/UninstallViewModelTests.swift`):默认选择集仅含「精确归属(bundleID)+ 可再生」;userData 与名称匹配的低置信项均不勾。
+- `findsExactLocationsWithGrading`(`Tests/UninstallKitTests/LeftoverLocatorTests.swift`):各位置的归属精确度与安全分级正确。
+- `nameMatchIsLowConfidence`(同文件)、`groupContainerAcceptsTeamPrefixedName`、`dedupesSamePathByLocationIDOrder`。
+- 硬保护与用户排除不进定位结果:`excludesUserExclusionsAndHardProtectedPaths`(同文件)。
 
 ### A3. 卸载提交 = 本体 + 已勾选;本体被跳过时应用留列表且报告可见 — ✅
 
-- `uninstallSubmitsBundleAndSelectedLeftovers`(`Tests/AppCoreTests/UninstallViewModelTests.swift:71`):`MockTrash` 收到的调用恰为 `[应用本体, 已勾选可再生数据]`,默认未勾的 userData 不提交;报告字节数 = 本体 + 已勾选;应用移出列表;`detailAppID == nil`;`lastUninstallBundleRemoved == true`;history 落一条。
-- `skippedBundleKeepsAppAndCleanedLeftoversConverge`(同文件:98):本体被 trash 跳过 → 应用仍在列表;报告 `skipped` 含本体路径;`detailAppID == nil`;`lastUninstallBundleRemoved == false`;已提交的关联数据仍正常收敛。
-- `uninstallClosesDetailImmediately`(:131):清理 Task 尚未完成时详情页已退栈(防旧详情盖住进度/报告)。
-- 剩余项收敛:`appRemovedKeepsUnselectedUserDataAsRemaining`(:189)、`appRemovedKeepsSkippedLeftover`(:209)。
+- `uninstallSubmitsBundleAndSelectedLeftovers`(`Tests/AppCoreTests/UninstallViewModelTests.swift`):`MockTrash` 收到的调用恰为 `[应用本体, 已勾选可再生数据]`,默认未勾的 userData 不提交;报告字节数 = 本体 + 已勾选;应用移出列表;`detailAppID == nil`;`lastUninstallBundleRemoved == true`;history 落一条。
+- `skippedBundleKeepsAppAndCleanedLeftoversConverge`(同文件):本体被 trash 跳过 → 应用仍在列表;报告 `skipped` 含本体路径;`detailAppID == nil`;`lastUninstallBundleRemoved == false`;已提交的关联数据仍正常收敛。
+- `uninstallClosesDetailImmediately`(同文件):清理 Task 尚未完成时详情页已退栈(防旧详情盖住进度/报告)。
+- 剩余项收敛:`appRemovedKeepsUnselectedUserDataAsRemaining`、`appRemovedKeepsSkippedLeftover`。
 
 ### A4. 孤儿扫描默认勾选 = 高置信 + 可再生;跳过项收敛留在结果里;未勾选项保留 — ✅
 
-- `orphanScanDefaultsToHighConfidenceRegenerable`(`Tests/AppCoreTests/UninstallViewModelTests.swift:308`):仅「精确归属 + 可再生」进入默认选择集;低置信即使可再生也不勾;结果按大小降序;`failedLocationIDs` 原样透出。
-- `cleanOrphansConvergesOnlyCleanedSubset`(同文件:335):提交两条、其中一条被跳过 → 跳过的仍留在结果与选择集,报告可见,`remainingCount == 1`。
-- `unselectedOrphanRemainsAfterClean`(:525):未勾选项清理后仍在结果中,`remainingBytes` 正确。
-- 扫描透传已安装集合:`orphanScanPassesInstalledSetsFromDiscovery`(:388);孤儿判定本身见 `Tests/UninstallKitTests/OrphanScannerTests.swift` 的 `highConfidenceOrphanWhenBundleIDNotInstalled`(:24)、`installedAppsAreNotOrphans`(:37)、`appleBundleIDsAreNeverOrphans`(:49)、`lowConfidenceForNonReverseDNSNames`(:65)、大小写折叠 `installedBundleIDMatchingIsCaseInsensitive`(:138) 等。
+- `orphanScanDefaultsToHighConfidenceRegenerable`(`Tests/AppCoreTests/UninstallViewModelTests.swift`):仅「精确归属 + 可再生」进入默认选择集;低置信即使可再生也不勾;结果按大小降序;`failedLocationIDs` 原样透出。
+- `cleanOrphansConvergesOnlyCleanedSubset`(同文件):提交两条、其中一条被跳过 → 跳过的仍留在结果与选择集,报告可见,`remainingCount == 1`。
+- `unselectedOrphanRemainsAfterClean`(同文件):未勾选项清理后仍在结果中,`remainingBytes` 正确。
+- 扫描透传已安装集合:`orphanScanPassesInstalledSetsFromDiscovery`;孤儿判定本身见 `Tests/UninstallKitTests/OrphanScannerTests.swift` 的 `highConfidenceOrphanWhenBundleIDNotInstalled`、`installedAppsAreNotOrphans`、`appleBundleIDsAreNeverOrphans`、`lowConfidenceForNonReverseDNSNames`、大小写折叠 `installedBundleIDMatchingIsCaseInsensitive` 等。
 
 ### A5. 作用域白名单:越界路径不进提交(卸载流与孤儿流各一条)— ✅
 
-- 卸载流 VM 级:`scopeWhitelistDropsRoguePaths`(`Tests/AppCoreTests/UninstallViewModelTests.swift:149`)——手动塞入 `~/Library/Preferences/...` 后被剔除,提交仅为本体 + 合法项。
-- 卸载流安全锚点:`scopeWhitelistDropsRogueLocatorItems`(同文件:167)——上游定位器返回越界项且默认勾选会选中它们时,提交前仍被 scope 剔除(不依赖上游过滤的副作用)。
-- 孤儿流:`orphanCleanDropsRogueLocatorItems`(同文件:369)。
-- 基础不变量:`scopeOnlyAllowsDirectChildrenOfKnownFolders`(`Tests/UninstallKitTests/LeftoverLocatorTests.swift:137`);路径穿越 `rejectsBundleIDPathTraversalAcrossLocations`(:82)、`rejectsAppNamePathTraversalAcrossLocations`(:88);祖先符号链接越界 `skipsLocationWhoseResolvedDirEscapesLibrary`(:112,孤儿侧同文件 `Tests/UninstallKitTests/OrphanScannerTests.swift:105`);`~/Library` 自身为链接仍可定位 `libraryItselfBeingSymlinkStillLocates`(:123)。
+- 卸载流 VM 级:`scopeWhitelistDropsRoguePaths`(`Tests/AppCoreTests/UninstallViewModelTests.swift`)——手动塞入 `~/Library/Preferences/...` 后被剔除,提交仅为本体 + 合法项。
+- 卸载流安全锚点:`scopeWhitelistDropsRogueLocatorItems`(同文件)——上游定位器返回越界项且默认勾选会选中它们时,提交前仍被 scope 剔除(不依赖上游过滤的副作用)。
+- 孤儿流:`orphanCleanDropsRogueLocatorItems`(同文件)。
+- 基础不变量:`scopeOnlyAllowsDirectChildrenOfKnownFolders`(`Tests/UninstallKitTests/LeftoverLocatorTests.swift`);路径穿越 `rejectsBundleIDPathTraversalAcrossLocations`、`rejectsAppNamePathTraversalAcrossLocations`;祖先符号链接越界 `skipsLocationWhoseResolvedDirEscapesLibrary`(孤儿侧同文件 `Tests/UninstallKitTests/OrphanScannerTests.swift`);`~/Library` 自身为链接仍可定位 `libraryItselfBeingSymlinkStillLocates`。
 
 ### A6. `~/Library/Preferences`、`~/Library/Cookies` 硬保护事实 — ✅
 
-- `preferencesAndCookiesAreHardProtected`(`Tests/UninstallKitTests/LeftoverLocationsTests.swift:64`):`ProtectionStore.isDenied` 对 Preferences/Cookies 下路径均为真,Caches 不受影响。
-- `excludedFoldersNeverEnterTableAndAreDenied`(同文件:52):位置表的排除目录与硬保护一致,Preferences/Cookies 不进入二期位置表。
-- `tableHasExpectedIDsAndGrading`(同文件:8):位置表 ID、归属与分级符合规格。
+- `preferencesAndCookiesAreHardProtected`(`Tests/UninstallKitTests/LeftoverLocationsTests.swift`):`ProtectionStore.isDenied` 对 Preferences/Cookies 下路径均为真,Caches 不受影响。
+- `excludedFoldersNeverEnterTableAndAreDenied`(同文件):位置表的排除目录与硬保护一致,Preferences/Cookies 不进入二期位置表。
+- `tableHasExpectedIDsAndGrading`(同文件):位置表 ID、归属与分级符合规格。
 
 ### A7. history 保留最近 200 条 — ✅
 
-- `keepsOnlyLatest200Reports`(`Tests/CleanKitTests/HistoryStoreTests.swift:32`):追加 205 条后 `loadAll().count == 200`,最早 5 条被裁剪,首尾内容正确。
+- `keepsOnlyLatest200Reports`(`Tests/CleanKitTests/HistoryStoreTests.swift`):追加 205 条后 `loadAll().count == 200`,最早 5 条被裁剪,首尾内容正确。
 - 辅证:`append_and_loadAll_roundtrip`、`append_preservesCorruptFileAside_andRecovers`(同文件)。
 
 ### A8. 一期清理进度回投 — ✅(二期进度见「已知测试缺口」)
 
-- `cleanSelected_reportsProgress`(`Tests/AppCoreTests/ScanViewModelTests.swift:289`):清理开始时 `total == 2`、完成后 `done == 2`,`CleanProgress` 经回调回投 VM。
-- 二期卸载/孤儿清理进度已在代码落位(`UninstallViewModel.swift:190` 初始化、`:198` 逐项回投),但**无专测断言中间态**;不将代码落位冒充自动核验,详见文末缺口。
+- `cleanSelected_reportsProgress`(`Tests/AppCoreTests/ScanViewModelTests.swift`):清理开始时 `total == 2`、完成后 `done == 2`,`CleanProgress` 经回调回投 VM。
+- 二期卸载/孤儿清理进度已在代码落位(`UninstallViewModel.swift:218` 初始化、`:226` 逐项回投),但**无专测断言中间态**;不将代码落位冒充自动核验,详见文末缺口。
 
 ### A9. 状态机守卫、取消复位与 stale 结果过滤 — ✅
 
-- 取消发现可复位重试:`cancelledDiscoveryResetsTaskAndAllowsRetry`(`Tests/AppCoreTests/UninstallViewModelTests.swift:226`)。
-- 重入/并发守卫:`uninstallIsGuardedWhileCleaning`(:279)、`cleanOrphansIsGuardedWhileCleaning`(:509)、`scanOrphansIsNoOpBeforeDiscoveryCompletes`(:408)、`scanOrphansIsNoOpWhileScanning`(:450)、`startDiscoveryIsIdempotentWithoutForce`(:254)、`cancelOrphanScanReturnsToIdle`(:358)。
-- stale 过滤:`staleProgressAfterCancelIsIgnored`(:427)、`staleTaskCleanupDoesNotClearNewerScanHandle`(:473);一期对称守卫 `cleanSelected_reentrancyGuarded`(`Tests/AppCoreTests/ScanViewModelTests.swift:110`)。
-- 生产装配不触真实 `/Applications`:`factoryWiresLocatorForTempHome`、`factoryWiresOrphanScanForTempHome`、`runningCheckerMatchesSystemQuery`(`Tests/AppCoreTests/UninstallServicesTests.swift:24,9,39`)。
+- 取消发现可复位重试:`cancelledDiscoveryResetsTaskAndAllowsRetry`(`Tests/AppCoreTests/UninstallViewModelTests.swift`)。
+- 重入/并发守卫:`uninstallIsGuardedWhileCleaning`、`cleanOrphansIsGuardedWhileCleaning`、`scanOrphansIsNoOpBeforeDiscoveryCompletes`、`scanOrphansIsNoOpWhileScanning`、`startDiscoveryIsIdempotentWithoutForce`、`cancelOrphanScanReturnsToIdle`。
+- stale 过滤:`staleProgressAfterCancelIsIgnored`、`staleTaskCleanupDoesNotClearNewerScanHandle`;一期对称守卫 `cleanSelected_reentrancyGuarded`(`Tests/AppCoreTests/ScanViewModelTests.swift`)。
+- 生产装配不触真实 `/Applications`:`factoryWiresLocatorForTempHome`、`factoryWiresOrphanScanForTempHome`、`runningCheckerMatchesSystemQuery`(`Tests/AppCoreTests/UninstallServicesTests.swift`)。
 
 ### A10. 发现/扫描进度与失败位置透出 — ✅
 
-- `recordsFailedLocationWhenEnumerationFails`(`Tests/UninstallKitTests/OrphanScannerTests.swift:188`):位置目录枚举失败被记录为 `failedLocationIDs`(值为位置 ID,UI 再映射为目录名),进度仍走完。
-- `missingLocationsAreNotFailuresAndProgressCompletes`(同文件:93):位置缺失不算失败,进度完成数为位置总数。
-- `reportsProgressWhileEnumerating`(`Tests/UninstallKitTests/AppDiscoveryTests.swift:81`)、`throwsOnCancellation`(:229)。
+- `recordsFailedLocationWhenEnumerationFails`(`Tests/UninstallKitTests/OrphanScannerTests.swift`):位置目录枚举失败被记录为 `failedLocationIDs`(值为位置 ID,UI 再映射为目录名),进度仍走完。
+- `missingLocationsAreNotFailuresAndProgressCompletes`(同文件):位置缺失不算失败,进度完成数为位置总数。
+- `reportsProgressWhileEnumerating`(`Tests/UninstallKitTests/AppDiscoveryTests.swift`)、`throwsOnCancellation`。
 
 ## 二、⏳ 待人工项(8 项)
 
@@ -123,7 +123,7 @@
 - 步骤:分别在中文/英文、浅色/深色下走「卸载列表 → 应用详情 → 孤儿残留 → 确认弹窗 → 报告页」;测试空搜索、无匹配搜索、超长路径行。
 - 语言切换命令(同一期):`defaults write com.raccooncleaner.Raccoon AppleLanguages -array en` → 重启应用应显示英文;`defaults delete com.raccooncleaner.Raccoon AppleLanguages` → 重启恢复中文。
 - 预期:文案完整不截断、无重叠/溢出;长路径以中间截断显示;空态与搜索无结果提示可读;分组标题与标签对比度足够;**应用详情与孤儿页均不出现 `~/Library/Preferences`、`~/Library/Cookies` 条目**。
-- 自动半段:L10n 键集 93:93(见混合项 H1),不代表视觉无破版。
+- 自动半段:L10n 键集 94:94(见混合项 H1),不代表视觉无破版。
 
 ### M6. `LeftoverRow` 点 Toggle 与点行空白处各只切换一次 — ⏳ 待人工
 
@@ -146,7 +146,7 @@
 
 ### H1. 中英双语与浅/深色适配 — 混合
 
-- ✅ 自动半段:zh-Hans 与 en 各 93 键,键集 diff 为空;全部二期新增文案经 `loc()` 消费;规则描述双语由既有测试保证。
+- ✅ 自动半段:zh-Hans 与 en 各 94 键,键集 diff 为空;全部二期新增文案经 `loc()` 消费;规则描述双语由既有测试保证。
 - ⏳ 人工半段:切换系统语言与外观,逐页检查新页面文案、换行与对比度;见 M5。
 
 ### H2. 二期新页面布局与信息层级 — 混合
@@ -166,15 +166,22 @@
 
 ### H5. 报告页「返回列表」与「扫描残留…」路径 — 混合
 
-- ✅ 自动半段:路由与守卫有测试 `returnFromReportGoesBackToList`、`returnFromReportIsGuardedOutsideReport`(`Tests/AppCoreTests/UninstallViewModelTests.swift:118,247`);「扫描残留…」出现条件为代码锚点(`UninstallHomeView.swift` 的 `scanOrphansFromReportAction`:应用流 + 本体已删 + 仍有剩余)。
+- ✅ 自动半段:路由与守卫有测试 `returnFromReportGoesBackToList`、`returnFromReportIsGuardedOutsideReport`(`Tests/AppCoreTests/UninstallViewModelTests.swift`);「扫描残留…」出现条件为代码锚点(`UninstallHomeView.swift` 的 `scanOrphansFromReportAction`:应用流 + 本体已删 + 仍有剩余)。
 - ⏳ 人工半段:部分卸载(保留未勾 userData)使 `remainingCount > 0` 且本体已删 → 报告页点「扫描残留…」;另一次清理点「返回列表」。预期:「扫描残留…」仅在该条件下出现,点击后回列表并切到孤儿页自动扫描;「返回列表」回应用列表,已清理项消失、未清理项保留。
 
 ## 已知测试缺口(诚实记录)
 
-1. **二期清理进度中间态无专测**:`UninstallViewModel.swift:190,198` 已回投 `cleanProgress`,但无测试像一期 `cleanSelected_reportsProgress` 那样断言卸载/孤儿清理的逐项中间态。计划文档已列为可选强化(3 项 + 门控 trash,断言中途 `done == 1`)。
+1. **二期清理进度中间态无专测**:`UninstallViewModel.swift:218,226` 已回投 `cleanProgress`,但无测试像一期 `cleanSelected_reportsProgress` 那样断言卸载/孤儿清理的逐项中间态。计划文档已列为可选强化(3 项 + 门控 trash,断言中途 `done == 1`)。
 2. **确认弹窗快捷键无仓库内自动化测试**:Return 的事件探针是实施期一次性证据,不在仓库、不可复现,不作为验收依据;Return 与 Esc 都必须由 H4 真机复核,破坏性按钮应只能点按。
 3. **`LeftoverRow` 双触发**:依赖 SwiftUI 控件优先权,无单测可覆盖,必须 M6 真机验证。
 4. **历史文件临时目录清理**:`HistoryStoreTests` 未显式清理临时目录,属测试卫生问题,不影响功能结论。
+5. **孤儿确认流未做提交快照**:`cleanOrphans()` 在提交时读实时选择;确认 sheet 为模态,当前不可达,属与卸载流口径不一致的防御性缺口。
+6. **扫描按钮禁用条件未含「发现完成」**:UI 仅按 `phase != .list` 禁用,而 `scanOrphans()` 还要求 `hasDiscovered`;生产代码无取消发现入口,该态仅测试可达。
+7. **符号链接分级加固的边界**:位置目录解析到位置表一级目录时已取最严分级;若解析到更深层或表外目录则回退槽位分级,需人为构造链接才可触发(仍为 trash-only,可恢复)。
+8. **helper 容器可能被判高置信孤儿**:已安装集合只含主应用 Bundle ID / 名称 / LaunchServices;嵌入 helper 的容器 ID 若反向解析不到,会按「可再生的精确归属」默认勾选。属 spec §7 判定口径的固有误报面,trash-only 兜底。
+9. **发现根枚举错误被吞**:应用根不可读时当前显示空列表而非错误 + 重试,`phase = .failed` 实际仅测试可达。
+10. **发现/清理进度无代数令牌**:孤儿扫描已有 generation;发现与清理的进度回调在极端交错下可能短暂覆盖新值,纯视觉,无正确性或安全问题。
+11. **同一应用重开详情的旧任务写回无专测**:现有测试覆盖 A→B 切换;同 bundleID 重开由 `detailAppID` + 代数双重校验保证,但无独立用例钉住。
 
 ## 已知限制
 
@@ -194,10 +201,10 @@
 | 15.1 `swift run` 列出 `/Applications` 与 `~/Applications` 应用(排除 Apple/非应用),详情展示分级数据,`Preferences`/`Cookies` 不出现 | 混合 | A1 / A6 + M5 / M7 | 自动:发现过滤与去重(A1)、Preferences/Cookies 硬保护事实(A6);人工:M5 目视详情分组与两处不出现,M7 验证列表/详情导航。 |
 | 15.2 真实卸载:本体与勾选数据进废纸篓且可放回,报告数字一致,userData 分区默认不勾 | ⏳ 待人工 | M1 | 见 M1 造数与步骤。A2/A3 只证明默认勾选与提交口径,不替代废纸篓放回与数字目视。 |
 | 15.3 真机孤儿扫描发现真实无主残留,高置信/未确认分组正确,默认仅勾「高置信 + 可再生」 | 混合 | A4 / A5 + M3 | 自动:默认勾选、排序、跳过收敛与作用域(A4/A5);人工:M3 造数、分组与失败位置展示。 |
-| 15.4 全程无提权、无 `rm`/unlink;`CleanExecutor` 仍是唯一删除路径 | ✅ | A3 / A5 / A9 | `grep -rn "removeItem\|unlink" Sources` 仅命中 `Sources/CleanKit/TrashService.swift:18` 的注释「绝不 unlink」,无任何实现调用;`removeItem` 零命中。文件删除唯一实现为 `Sources/CleanKit/TrashService.swift:21` 的 `FileManager.trashItem`;本地快照清理沿用一期 `tmutil deletelocalsnapshots` 例外(README 门 4 已载明),不属于文件删除实现。无提权代码模式(AuthorizationExecute/SMJobBless/sudo/NSAppleScript 等均无命中)。测试:`testClean_securityRegression_neverTrashesProtectedEvenIfInjected`(`Tests/CleanKitTests/CleanExecutorTests.swift:63`)、`testClean_aggregatesReport_andSkipsProtected`(:44)、`testFileManagerTrashService_trashesTempFile`(`Tests/CleanKitTests/TrashServiceTests.swift:21`)。 |
+| 15.4 全程无提权、无 `rm`/unlink;`CleanExecutor` 仍是唯一删除路径 | ✅ | A3 / A5 / A9 | `grep -rn "removeItem\|unlink" Sources` 仅命中 `Sources/CleanKit/TrashService.swift:18` 的注释「绝不 unlink」,无任何实现调用;`removeItem` 零命中。文件删除唯一实现为 `Sources/CleanKit/TrashService.swift:21` 的 `FileManager.trashItem`;本地快照清理沿用一期 `tmutil deletelocalsnapshots` 例外(README 门 4 已载明),不属于文件删除实现。无提权代码模式(AuthorizationExecute/SMJobBless/sudo/NSAppleScript 等均无命中)。测试:`testClean_securityRegression_neverTrashesProtectedEvenIfInjected`(`Tests/CleanKitTests/CleanExecutorTests.swift`)、`testClean_aggregatesReport_andSkipsProtected`、`testFileManagerTrashService_trashesTempFile`(`Tests/CleanKitTests/TrashServiceTests.swift`)。 |
 | 15.5 四道门在二期路径有自动化锚点(硬保护、排除清单、分级、trash-only),恶意/越界用例回归 | ✅ | A1–A7 / A9 | 门 1:A6 + A5;门 2:A1/A2;门 3:A2/A4;门 4:见 15.4;恶意/越界:A5/A9。 |
-| 15.6 中英双语、浅色/深色适配 | 混合 | H1 / H2 + M5 | 自动:zh/en 各 93 键、键集 diff 为空;人工:H1/H2/M5 目视切换语言与外观。 |
-| 15.7 `Scripts/test.sh` 全绿、CI 绿、L10n 键集 1:1 | 混合 | H1 + 统计 | 本地 **175/175 全绿**、L10n **93:93** 已实测(H1 自动半段);**CI 未在 `feat/phase2` 运行(该分支无 upstream、尚未推送),待推送后验证,不得标绿**。 |
+| 15.6 中英双语、浅色/深色适配 | 混合 | H1 / H2 + M5 | 自动:zh/en 各 94 键、键集 diff 为空;人工:H1/H2/M5 目视切换语言与外观。 |
+| 15.7 `Scripts/test.sh` 全绿、CI 绿、L10n 键集 1:1 | 混合 | H1 + 统计 | 本地 **183/183 全绿**、L10n **94:94** 已实测(H1 自动半段);**CI 未在 `feat/phase2` 运行(该分支无 upstream、尚未推送),待推送后验证,不得标绿**。 |
 | 15.8 README 与 QA 清单如实标注人工项与已知限制(§8.4、§14) | ✅ | 本文档 + README | README 新增「已知限制」段;本清单分列 ✅/⏳/混合,并在「已知测试缺口」记录未覆盖面。 |
 
 ## 统计
@@ -208,4 +215,4 @@
 - **⏳ 整体待人工:8 项**(M1–M8),每项均给出操作步骤与预期。
 - **混合:5 项**(H1–H5),自动半段与人工半段分列,自动半段不替人工背书。
 
-**结论**:工程侧自动可核验面全部为绿(175/175、L10n 93:93);二期功能与交互的人工验收尚未执行,本文档不宣称任何未真机验证项为「满足」。
+**结论**:工程侧自动可核验面全部为绿(183/183、L10n 94:94);二期功能与交互的人工验收尚未执行,本文档不宣称任何未真机验证项为「满足」。

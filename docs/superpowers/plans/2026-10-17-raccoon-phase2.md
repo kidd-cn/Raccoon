@@ -3068,7 +3068,7 @@ Task 13 与 8/9 互不冲突,可在 12 之后任意时点执行;Task 14 的用�
 
 ## 执行记录(2026-10-17,feat/phase2)
 
-Task 1–13 已完成并通过逐任务规格审 + 质量审;Task 14 文档/QA 由本次提交补齐,Task 15 终审随后完成。当前全量 **175/175** 绿(UninstallKit 63 / ScanKit 40 / CleanKit 27 / AppCore 45),中英 L10n 各 93 键 1:1(键集 diff 为空)。
+Task 1–13 已完成并通过逐任务规格审 + 质量审;Task 14 文档/QA 由本次提交补齐,Task 15 终审随后完成。当前全量 **183/183** 绿(UninstallKit 66 / ScanKit 40 / CleanKit 27 / AppCore 50),中英 L10n 各 94 键 1:1(键集 diff 为空)。
 
 ### 实现期偏差与加固(均经双审确认)
 
@@ -3088,5 +3088,13 @@ Task 1–13 已完成并通过逐任务规格审 + 质量审;Task 14 文档/QA �
 - 可选测试强化:一期清理进度中间态(3 项 + 门控 trash,断言中途 `done == 1`);二期清理进度中间态同法补齐;`HistoryStoreTests` 临时目录清理。
 - 已知缺口:二期清理进度无专测断言中间态;确认弹窗 Return/Esc 快捷键与 `LeftoverRow` 双触发需真机验证,详见 QA 清单「已知测试缺口」。
 
-Task 14 文档已按文档审修订;Task 15 终审随后执行并补充最终状态。文档按第二轮质量审修订了 15.4 的 grep 证据、M3 权限恢复与空态条件、§14 措辞,并同步 Task 15 安全自查预期。
+Task 14 文档已按文档审修订;文档按第二轮质量审修订了 15.4 的 grep 证据、M3 权限恢复与空态条件、§14 措辞,并同步 Task 15 安全自查预期。后续补修 M3 的权限记录顺序(`efc4dd8`)。
+
+### Task 15 终验结果(2026-10-17)
+
+- **全量验证**:`swift build` 成功;`Scripts/test.sh` **183/183 全绿**(UninstallKit 66 / ScanKit 40 / CleanKit 27 / AppCore 50);L10n 键集 **94:94**,diff 为空;提交前工作区干净。
+- **安全自查**:`grep -rn "removeItem\|unlink" Sources` 仅命中 `Sources/CleanKit/TrashService.swift:18` 注释(无实现调用,`removeItem` 零命中);`trashItem` 唯一实现在 `TrashService.swift:21`;`Sources/UninstallKit` 无 `NSHomeDirectory()`;无 AuthorizationExecute/SMJobBless/sudo/NSAppleScript 等提权模式。
+- **整体终审**(独立审查 `git diff main...HEAD`):无 Critical、无越界删除、无提权、无 trash-only 破口;四道门与收敛主链路成立。发现 1 条 Important(详情页关联数据无加载态,假空态且确认项数可漂移)及若干 Minor。
+- **修复**:`c9ae1ff` 增加 `isLoadingLeftovers` + 提交快照、报告页返回入口、Group Containers 大小写折叠、`scanOrphans` 的 `hasDiscovered` 守卫、详情路径展示、位置目录符号链接最严分级;新增 8 个测试。终审者复验 **REVIEW: ✅ 可合并**,余项为低可达性防御性缺口,已记入 QA 清单「已知测试缺口」。
+- **未做**:真机人工 QA(见 QA 清单 M1–M8/H1–H5);CI 未在 `feat/phase2` 运行(无 upstream、未推送),不得标绿;未 push/merge。
 
