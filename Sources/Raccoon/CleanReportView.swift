@@ -9,8 +9,9 @@ struct CleanReportView: View {
     let remainingBytes: Int64
     let onBack: (() -> Void)?
     let onRescan: (() -> Void)?
+    var onScanOrphans: (() -> Void)? = nil
 
-    func reasonText(_ code: String) -> String {
+    private func reasonText(_ code: String) -> String {
         let key = "reason.\(code)"
         let value = loc(key)
         return value == key ? loc("reason.other") : value
@@ -20,6 +21,7 @@ struct CleanReportView: View {
         VStack(spacing: 14) {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 44)).foregroundStyle(.green)
+                .accessibilityHidden(true)
             Text(loc("report.done")).font(.title2).bold()
             // freed 口径:仅统计成功移入废纸篓的字节;vanished(应用抢先删)与快照不计入
             Text(loc("report.freed", byteText(report.freedBytes))).monospacedDigit()
@@ -53,6 +55,9 @@ struct CleanReportView: View {
                     if let onBack {
                         Button(loc("report.backToList")) { onBack() }
                             .buttonStyle(.borderedProminent)
+                    }
+                    if let onScanOrphans {
+                        Button(loc("orphans.scan")) { onScanOrphans() }
                     }
                     if let onRescan {
                         Button(loc("report.again")) { onRescan() }
