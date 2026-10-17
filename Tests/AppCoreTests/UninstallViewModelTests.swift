@@ -124,7 +124,7 @@ final class UninstallViewModelTests {
         #expect(vm.detailAppID == nil)
     }
 
-    // 安全锚点:上游若塞入越界路径,提交前必须被作用域白名单剔除
+    // 选择集混入 leftovers 之外的路径不会被提交;作用域白名单本身由下一条用例钉住。
     @Test func scopeWhitelistDropsRoguePaths() async {
         let app = makeTestApp(home: home)
         let regen = leftover("Caches/com.example.foo", home: home)
@@ -162,5 +162,125 @@ final class UninstallViewModelTests {
         vm.requestUninstall(); vm.uninstall()
         await vm.cleanTask?.value
         #expect(await trash.calls == [app.appPath, regen.path])
+    }
+
+    // 收敛不变量:本体已清理时,未勾选的 userData 仍在磁盘,必须留在剩余项里。
+    @Test func appRemovedKeepsUnselectedUserDataAsRemaining() async {
+        let app = makeTestApp(home: home)
+        let regen = leftover("Caches/com.example.foo", home: home, size: 10)
+        let user = leftover("Application Support/com.example.foo", home: home, size: 20,
+                            safety: .userData, locationID: "app-support")
+        let trash = MockTrash(outcome: .trashed)
+        let vm = makeVM(apps: [app], leftovers: ["com.example.foo": [regen, user]], trash: trash)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.openDetail(app); await vm.leftoverTask?.value
+        vm.requestUninstall(); vm.uninstall(); await vm.cleanTask?.value
+
+        #expect(vm.apps.isEmpty)
+        #expect(vm.leftovers.map(\.path) == [user.path])   // 未勾选 userData 仍在磁盘
+        #expect(vm.remainingCount == 1)
+        #expect(vm.remainingBytes == 20)
+        guard case .report(let report) = vm.cleanState else { Issue.record(); return }
+        #expect(report.skipped.isEmpty)
+    }
+
+    // 收敛不变量:本体已清理时,已提交但 skipped 的关联数据仍在磁盘,必须留在剩余项里。
+    @Test func appRemovedKeepsSkippedLeftover() async {
+        let app = makeTestApp(home: home)
+        let regen = leftover("Caches/com.example.foo", home: home, size: 10)
+        let trash = MockTrash(outcome: .trashed, skippedFor: [regen.path])
+        let vm = makeVM(apps: [app], leftovers: ["com.example.foo": [regen]], trash: trash)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.openDetail(app); await vm.leftoverTask?.value
+        vm.requestUninstall(); vm.uninstall(); await vm.cleanTask?.value
+
+        #expect(vm.apps.isEmpty)
+        #expect(vm.leftovers.map(\.path) == [regen.path])
+        #expect(vm.selectedLeftoverPaths == [regen.path])
+        #expect(vm.remainingCount == 1)
+    }
+
+    // 取消发现后 task 句柄必须复位,否则后续 startDiscovery(含 force)被永久挡住。
+    @Test func cancelledDiscoveryResetsTaskAndAllowsRetry() async {
+        struct CancellingDiscovering: AppDiscovering {
+            func discover(exclusions: [String],
+                          progress: @Sendable (AppDiscoveryProgress) -> Void) async throws -> AppDiscoveryResult {
+                _ = withUnsafeCurrentTask { $0?.cancel() }
+                return AppDiscoveryResult(apps: [], unreadableCount: 0)
+            }
+        }
+        let vm = UninstallViewModel(
+            discovery: CancellingDiscovering(),
+            locator: FakeLeftoverLocating(map: [:]),
+            orphanScanner: FakeOrphanScanning(result: .init(orphans: [], failedLocationIDs: [])),
+            exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "uvm-\(UUID().uuidString)")!),
+            history: history, trash: MockTrash(outcome: .trashed), home: home)
+        vm.startDiscovery()
+        await vm.discoveryTask?.value
+        #expect(vm.discoveryTask == nil)
+        #expect(vm.phase == .list)
+
+        vm.startDiscovery()   // 取消后非 force 也能重试
+        await vm.discoveryTask?.value
+        #expect(vm.phase == .list)
+    }
+
+    @Test func returnFromReportIsGuardedOutsideReport() {
+        let vm = makeVM()
+        vm.returnFromReport()
+        #expect(vm.cleanState == nil)
+        #expect(vm.phase == .discovering)
+    }
+
+    @Test func startDiscoveryIsIdempotentWithoutForce() async {
+        final class CountingDiscovering: AppDiscovering, @unchecked Sendable {
+            private(set) var calls = 0
+            let result: AppDiscoveryResult
+            init(result: AppDiscoveryResult) { self.result = result }
+            func discover(exclusions: [String],
+                          progress: @Sendable (AppDiscoveryProgress) -> Void) async throws -> AppDiscoveryResult {
+                calls += 1
+                return result
+            }
+        }
+        let discovery = CountingDiscovering(result: .init(apps: [], unreadableCount: 0))
+        let vm = UninstallViewModel(
+            discovery: discovery,
+            locator: FakeLeftoverLocating(map: [:]),
+            orphanScanner: FakeOrphanScanning(result: .init(orphans: [], failedLocationIDs: [])),
+            exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "uvm-\(UUID().uuidString)")!),
+            history: history, trash: MockTrash(outcome: .trashed), home: home)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        #expect(discovery.calls == 1)
+        vm.startDiscovery(force: true); await vm.discoveryTask?.value
+        #expect(discovery.calls == 2)
+    }
+
+    @Test func uninstallIsGuardedWhileCleaning() async {
+        let app = makeTestApp(home: home)
+        let trash = MockTrash(outcome: .trashed)
+        let vm = makeVM(apps: [app], leftovers: ["com.example.foo": []], trash: trash)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.openDetail(app); await vm.leftoverTask?.value
+        vm.requestUninstall(); vm.uninstall()
+        #expect(vm.cleanState == .cleaning)
+        vm.confirmFlow = .apps          // 程序化重入面
+        vm.uninstall()                  // 必须被 cleanState 守卫挡住
+        await vm.cleanTask?.value
+        #expect(await trash.calls == [app.appPath])
+    }
+
+    // lastCleanup 取历史中日期最新的一条(CleanReport 构造允许指定日期)。
+    @Test func loadLastCleanupPicksNewest() throws {
+        let older = CleanReport(date: Date(timeIntervalSince1970: 100),
+                                freedBytes: 1, trashedCount: 1, vanishedCount: 0, skipped: [])
+        let newer = CleanReport(date: Date(timeIntervalSince1970: 200),
+                                freedBytes: 2, trashedCount: 2, vanishedCount: 0, skipped: [])
+        try history.append(older)
+        try history.append(newer)
+        let vm = makeVM()
+        vm.loadLastCleanup()
+        #expect(vm.lastCleanup?.freedBytes == 2)
     }
 }

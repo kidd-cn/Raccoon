@@ -82,20 +82,25 @@ public final class UninstallViewModel {
         let exclusionsSnapshot = exclusions.exclusions
         discoveryTask = Task { [weak self] in
             guard let self else { return }
+            defer { self.discoveryTask = nil }
             do {
                 let result = try await self.discovery.discover(exclusions: exclusionsSnapshot) { [weak self] p in
                     Task { @MainActor [weak self] in self?.discoveryProgress = p }
                 }
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else {
+                    self.hasDiscovered = false
+                    self.phase = .list
+                    return
+                }
                 self.apps = result.apps
                 self.unreadableCount = result.unreadableCount
                 self.phase = .list
             } catch is CancellationError {
+                self.hasDiscovered = false
                 self.phase = .list
             } catch {
                 self.phase = .failed(error.localizedDescription)
             }
-            self.discoveryTask = nil
         }
     }
 
@@ -164,6 +169,7 @@ public final class UninstallViewModel {
     public func cancelConfirm() { confirmFlow = nil }
 
     public func uninstall() {
+        guard cleanState == nil else { return }
         guard confirmFlow == .apps else { return }
         let items = uninstallItems
         guard !items.isEmpty else { return }
@@ -171,6 +177,7 @@ public final class UninstallViewModel {
     }
 
     private func runClean(_ items: [CleanItem], flow: CleanFlow) {
+        guard cleanState == nil else { return }
         confirmFlow = nil
         cleanState = .cleaning
         cleanFlow = flow
@@ -202,12 +209,11 @@ public final class UninstallViewModel {
             if let app = focusedApp, gone.contains(app.appPath) {
                 apps.removeAll { $0.bundleID == app.bundleID }
                 detailAppID = nil
-                leftovers = []
-                selectedLeftoverPaths = []
-            } else {
-                leftovers.removeAll { gone.contains($0.path) }
-                selectedLeftoverPaths.subtract(gone)
             }
+            // 本体是否已清理都只按 gone 差集收敛:未勾选的 userData 与已提交但 skipped
+            // 的关联数据仍在磁盘,必须留在剩余项里(已清理项移出、跳过项保留)。
+            leftovers.removeAll { gone.contains($0.path) }
+            selectedLeftoverPaths.subtract(gone)
         case .orphans:
             orphans.removeAll { gone.contains($0.path) }
             selectedOrphanPaths.subtract(gone)
