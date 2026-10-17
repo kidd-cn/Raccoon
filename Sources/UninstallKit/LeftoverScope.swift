@@ -34,4 +34,21 @@ public struct LeftoverScope: Sendable {
             directory.resolvingSymlinksInPath().path).lowercased()
         return resolved == resolvedLibrary || resolved.hasPrefix(resolvedLibrary + "/")
     }
+
+    /// 位置目录自身的符号链接会把槽位的分级带偏(如 Caches → Application Support):
+    /// 解析后若落在位置表的某个目录上,取该目录所有位置中最严格的 safety
+    /// (userData 优先于 regenerable);否则沿用槽位分级。
+    /// 穿透扫描行为不变,只修正结果分级。
+    public func effectiveSafety(for directory: URL, fallback: LeftoverSafety) -> LeftoverSafety {
+        let resolved = ProtectionStore.normalize(
+            directory.resolvingSymlinksInPath().path).lowercased()
+        let prefix = resolvedLibrary + "/"
+        guard resolved.hasPrefix(prefix) else { return fallback }
+        let folder = String(resolved.dropFirst(prefix.count))
+        // 只认位置表的一级目录;更深的解析目标不属于任何已知槽位。
+        guard !folder.isEmpty, !folder.contains("/") else { return fallback }
+        let matching = LeftoverLocations.all.filter { $0.folder.lowercased() == folder }
+        guard !matching.isEmpty else { return fallback }
+        return matching.contains { $0.safety == .userData } ? .userData : .regenerable
+    }
 }

@@ -50,24 +50,36 @@ struct CleanReportView: View {
                     .monospacedDigit().foregroundStyle(.secondary)
             }
             HStack {
-                // 还有剩余项时回列表是主路径(不必重扫即可接着清);全部清完时只剩再扫一次
                 if remainingCount > 0 {
-                    if let onBack {
-                        Button(loc("report.backToList")) { onBack() }
-                            .buttonStyle(.borderedProminent)
-                    }
                     if let onScanOrphans {
+                        // 本体已删但残留仍在:继续清残留是唯一正确的续作,回列表已无该应用。
                         Button(loc("orphans.scan")) { onScanOrphans() }
+                            .buttonStyle(.borderedProminent)
+                        if let onBack {
+                            Button(loc("report.backToList")) { onBack() }
+                        }
+                        if let onRescan {
+                            Button(loc("report.again")) { onRescan() }
+                        }
+                    } else {
+                        // 还有剩余项时回列表是主路径(不必重扫即可接着清)。
+                        if let onBack {
+                            Button(loc("report.backToList")) { onBack() }
+                                .buttonStyle(.borderedProminent)
+                        }
+                        if let onRescan {
+                            Button(loc("report.again")) { onRescan() }
+                        }
                     }
+                } else {
+                    // 全部清完:再扫一次为主按钮;返回列表仍始终可选。
                     if let onRescan {
                         Button(loc("report.again")) { onRescan() }
+                            .buttonStyle(.borderedProminent)
                     }
-                } else if let onRescan {
-                    Button(loc("report.again")) { onRescan() }
-                        .buttonStyle(.borderedProminent)
-                } else if let onBack {
-                    Button(loc("report.backToList")) { onBack() }
-                        .buttonStyle(.borderedProminent)
+                    if let onBack {
+                        Button(loc("report.backToList")) { onBack() }
+                    }
                 }
             }
         }

@@ -19,6 +19,53 @@ struct FakeLeftoverLocating: LeftoverLocating {
     }
 }
 
+/// 按调用序号独立放行的定位门:用于验证详情加载态,以及切换应用后旧任务不写回。
+actor LocatorGate {
+    private var calls = 0
+    private var started: Set<Int> = []
+    private var released: Set<Int> = []
+    private var startedWaiters: [Int: [CheckedContinuation<Void, Never>]] = [:]
+    private var resumeWaiters: [Int: CheckedContinuation<Void, Never>] = [:]
+
+    func nextIndex() -> Int {
+        calls += 1
+        return calls
+    }
+
+    func enter(index: Int) async {
+        started.insert(index)
+        for waiter in startedWaiters.removeValue(forKey: index) ?? [] { waiter.resume() }
+        if released.contains(index) { return }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            if released.contains(index) { continuation.resume() }
+            else { resumeWaiters[index] = continuation }
+        }
+    }
+
+    func waitUntilStarted(index: Int) async {
+        if started.contains(index) { return }
+        await withCheckedContinuation { continuation in
+            startedWaiters[index, default: []].append(continuation)
+        }
+    }
+
+    func release(index: Int) {
+        released.insert(index)
+        resumeWaiters.removeValue(forKey: index)?.resume()
+    }
+}
+
+final class GatedLeftoverLocating: LeftoverLocating, @unchecked Sendable {
+    let map: [String: [AppLeftover]]
+    let gate = LocatorGate()
+    init(map: [String: [AppLeftover]]) { self.map = map }
+    func leftovers(for app: InstalledApp, exclusions: [String]) async -> [AppLeftover] {
+        let index = await gate.nextIndex()
+        await gate.enter(index: index)
+        return map[app.bundleID] ?? []
+    }
+}
+
 struct FakeOrphanScanning: OrphanScanning {
     var result: OrphanScanResult
     func scan(installedBundleIDs: Set<String>, installedAppNames: Set<String>,

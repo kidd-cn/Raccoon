@@ -42,6 +42,7 @@ public struct OrphanScanner: OrphanScanning {
             let dir = library.appendingPathComponent(location.folder, isDirectory: true)
             // 位置目录的祖先链接不得把枚举带出 ~/Library(末端链接不受影响)。
             guard scope.isLocationContained(dir) else { continue }
+            let safety = scope.effectiveSafety(for: dir, fallback: location.safety)
             if !fm.fileExists(atPath: dir.path) { continue }
             // 路径形态枚举:穿透位置目录自身的符号链接(URL 形态不跟随末级链接)。
             let names: [String]
@@ -62,6 +63,7 @@ public struct OrphanScanner: OrphanScanning {
                 switch location.match {
                 case .appName:
                     guard let leftover = makeLowConfidence(entry, location: location,
+                                                           safety: safety,
                                                            installedNames: installedNames,
                                                            seen: &seen) else { continue }
                     orphans.append(leftover)
@@ -93,7 +95,7 @@ public struct OrphanScanner: OrphanScanning {
                     orphans.append(AppLeftover(
                         path: path,
                         sizeBytes: FileSize.bytes(at: entry, fm: fm),
-                        safety: location.safety,
+                        safety: safety,
                         ownership: .bundleID,
                         locationID: location.id
                     ))
@@ -104,7 +106,7 @@ public struct OrphanScanner: OrphanScanning {
     }
 
     private func makeLowConfidence(_ entry: URL, location: LeftoverLocation,
-                                   installedNames: Set<String>,
+                                   safety: LeftoverSafety, installedNames: Set<String>,
                                    seen: inout Set<String>) -> AppLeftover? {
         let name = entry.lastPathComponent
         guard !Self.isReverseDNS(name) else { return nil }
@@ -114,7 +116,7 @@ public struct OrphanScanner: OrphanScanning {
         guard seen.insert(path.lowercased()).inserted else { return nil }
         return AppLeftover(path: path,
                            sizeBytes: FileSize.bytes(at: entry, fm: fm),
-                           safety: location.safety,
+                           safety: safety,
                            ownership: .appName,
                            locationID: location.id)
     }

@@ -16,6 +16,10 @@ struct AppDetailView: View {
                             Text(app.name)
                             Text(app.version.map { loc("uninstall.version", $0) } ?? app.bundleID)
                                 .font(.caption).foregroundStyle(.secondary)
+                            // 头部展示本体路径:用户可确认将被移入废纸篓的到底是哪个包。
+                            Text(app.appPath)
+                                .font(.caption2).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle)
                         }
                         Spacer()
                         if app.isRunning { TagView(text: loc("detail.appRunning"), color: .yellow) }
@@ -41,7 +45,15 @@ struct AppDetailView: View {
                     }
                 }
 
-                if vm.leftovers.isEmpty {
+                if vm.isLoadingLeftovers {
+                    // 定位完成前不能显示「没有发现关联数据」:那是尚未知,不是没有。
+                    Section {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text(loc("uninstall.loadingLeftovers")).foregroundStyle(.secondary)
+                        }
+                    }
+                } else if vm.leftovers.isEmpty {
                     Section {
                         Text(loc("uninstall.noLeftovers")).foregroundStyle(.secondary)
                     }
@@ -53,7 +65,9 @@ struct AppDetailView: View {
         .navigationTitle(app.name)
         .toolbar {
             Button(loc("detail.selectAll")) { vm.selectAllLeftovers() }
+                .disabled(vm.isLoadingLeftovers)
             Button(loc("detail.selectNone")) { vm.selectNoneLeftovers() }
+                .disabled(vm.isLoadingLeftovers)
         }
     }
 
@@ -85,7 +99,7 @@ struct AppDetailView: View {
             Spacer()
             Button(loc("uninstall.button")) { vm.requestUninstall() }
                 .buttonStyle(.borderedProminent)
-                .disabled(vm.cleanState != nil)
+                .disabled(vm.cleanState != nil || vm.isLoadingLeftovers)
         }
         .padding(12)
     }

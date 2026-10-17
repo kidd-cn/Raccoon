@@ -31,6 +31,7 @@ public struct LeftoverLocator: LeftoverLocating {
             // 位置目录的祖先链接不得把枚举带出 ~/Library(末端链接不受影响)。
             guard scope.isLocationContained(dir) else { continue }
             let expectedParent = ProtectionStore.normalize(dir.path).lowercased()
+            let safety = scope.effectiveSafety(for: dir, fallback: location.safety)
             let candidates: [URL]
             switch location.match {
             case .exact:
@@ -43,9 +44,11 @@ public struct LeftoverLocator: LeftoverLocating {
                 guard bundleIDSafe else { continue }
                 let entries = (try? fm.contentsOfDirectory(
                     at: dir, includingPropertiesForKeys: nil, options: [])) ?? []
+                // 与孤儿扫描侧一致:目录名与 Bundle ID 的匹配大小写不敏感。
+                let id = app.bundleID.lowercased()
                 candidates = entries.filter {
-                    $0.lastPathComponent == app.bundleID
-                        || $0.lastPathComponent.hasSuffix("." + app.bundleID)
+                    let name = $0.lastPathComponent.lowercased()
+                    return name == id || name.hasSuffix("." + id)
                 }
             case .appName:
                 guard nameSafe else { continue }
@@ -53,6 +56,7 @@ public struct LeftoverLocator: LeftoverLocating {
             }
             for candidate in candidates {
                 guard let leftover = makeLeftover(candidate, location: location,
+                                                  safety: safety,
                                                   protection: protection,
                                                   expectedParent: expectedParent,
                                                   seen: &seen) else { continue }
@@ -63,7 +67,8 @@ public struct LeftoverLocator: LeftoverLocating {
     }
 
     private func makeLeftover(_ url: URL, location: LeftoverLocation,
-                              protection: ProtectionStore, expectedParent: String,
+                              safety: LeftoverSafety, protection: ProtectionStore,
+                              expectedParent: String,
                               seen: inout Set<String>) -> AppLeftover? {
         guard fm.fileExists(atPath: url.path) else { return nil }
         let path = ProtectionStore.normalize(url.path)
@@ -81,7 +86,7 @@ public struct LeftoverLocator: LeftoverLocating {
         guard seen.insert(path.lowercased()).inserted else { return nil }
         return AppLeftover(path: path,
                            sizeBytes: FileSize.bytes(at: url, fm: fm),
-                           safety: location.safety,
+                           safety: safety,
                            ownership: location.match == .appName ? .appName : .bundleID,
                            locationID: location.id)
     }

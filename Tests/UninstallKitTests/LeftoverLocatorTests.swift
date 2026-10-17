@@ -52,6 +52,15 @@ final class LeftoverLocatorTests {
         #expect(found.map(\.path) == [dir.path])
     }
 
+    // 组容器目录名与 Bundle ID 大小写不一致时仍须命中(与孤儿扫描侧口径一致)。
+    @Test func groupContainerMatchIsCaseInsensitive() async throws {
+        let dir = try home.makeDir("Library/Group Containers/TEAMID.COM.EXAMPLE.FOO", bytes: 8)
+        let found = await leftovers(app())
+        #expect(found.map(\.path) == [dir.path])
+        #expect(found.first?.locationID == "group-containers")
+        #expect(found.first?.safety == .userData)
+    }
+
     @Test func nameMatchIsLowConfidence() async throws {
         try home.makeDir("Library/Application Support/Foo", bytes: 11)
         try home.makeFile("Library/Logs/Foo", bytes: 12)
@@ -132,6 +141,21 @@ final class LeftoverLocatorTests {
         let expected = home.url.appendingPathComponent("Library/Caches/com.example.foo").path
         #expect(found.map(\.path) == [expected])
         #expect(found.first?.locationID == "caches")
+    }
+
+    // Caches 槽位被链到用户数据目录:分级必须取解析目标位置表中最严格的 safety,
+    // 否则 userData 会被当成 regenerable 默认勾选。
+    @Test func cachesSymlinkedToUserDataFolderGradesAsUserData() async throws {
+        try home.makeDir("Library/Application Support/com.example.foo", bytes: 30)
+        try FileManager.default.createSymbolicLink(
+            at: home.url.appendingPathComponent("Library/Caches"),
+            withDestinationURL: home.url.appendingPathComponent("Library/Application Support"))
+
+        let found = await leftovers(app())
+        let viaCaches = found.first { $0.locationID == "caches" }
+        #expect(viaCaches?.safety == .userData)
+        // 同一物理目录经 Application Support 槽位也能命中,两条路径字符串各自保留。
+        #expect(found.contains { $0.locationID == "app-support" })
     }
 
     @Test func scopeOnlyAllowsDirectChildrenOfKnownFolders() {

@@ -75,6 +75,7 @@
 "uninstall.group.unconfirmed" = "Unconfirmed ownership";
 "uninstall.tag.unconfirmed" = "Unconfirmed";
 "uninstall.noLeftovers" = "No associated data found";
+"uninstall.loadingLeftovers" = "Looking for associated data…";
 "uninstall.version" = "Version %@";
 "uninstall.button" = "Uninstall…";
 "uninstall.confirm.title" = "Confirm Uninstall";

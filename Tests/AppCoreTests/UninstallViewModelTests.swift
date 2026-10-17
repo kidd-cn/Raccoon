@@ -68,6 +68,104 @@ final class UninstallViewModelTests {
         #expect(vm.selectedLeftoverPaths == [regen.path])   // 低置信即便可再生也不默认勾选
     }
 
+    // 详情页在定位完成前必须处于加载态,否则会先闪出「没有发现关联数据」假空态。
+    @Test(.timeLimit(.minutes(1))) func openDetailExposesLoadingUntilLocatorReturns() async {
+        let app = makeTestApp(home: home)
+        let regen = leftover("Caches/com.example.foo", home: home)
+        let locator = GatedLeftoverLocating(map: ["com.example.foo": [regen]])
+        let vm = UninstallViewModel(
+            discovery: FakeAppDiscovering(result: .init(apps: [app], unreadableCount: 0)),
+            locator: locator,
+            orphanScanner: FakeOrphanScanning(result: .init(orphans: [], failedLocationIDs: [])),
+            exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "uvm-\(UUID().uuidString)")!),
+            history: history, trash: MockTrash(outcome: .trashed), home: home)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+
+        vm.openDetail(app)
+        #expect(vm.isLoadingLeftovers)
+        await locator.gate.waitUntilStarted(index: 1)
+        #expect(vm.isLoadingLeftovers)
+        #expect(vm.leftovers.isEmpty)
+
+        await locator.gate.release(index: 1)
+        await vm.leftoverTask?.value
+        #expect(!vm.isLoadingLeftovers)
+        #expect(vm.leftovers.map(\.path) == [regen.path])
+        #expect(vm.selectedLeftoverPaths == [regen.path])
+    }
+
+    // 切换应用后旧定位任务不得把加载态或条目写回新详情页。
+    @Test(.timeLimit(.minutes(1))) func staleDetailLoadDoesNotOverwriteNewerDetail() async {
+        let a = makeTestApp(bundleID: "com.example.alpha", name: "Alpha", home: home)
+        let b = makeTestApp(bundleID: "com.example.beta", name: "Beta", home: home)
+        let aItem = leftover("Caches/com.example.alpha", home: home)
+        let bItem = leftover("Caches/com.example.beta", home: home)
+        let locator = GatedLeftoverLocating(map: ["com.example.alpha": [aItem],
+                                                  "com.example.beta": [bItem]])
+        let vm = UninstallViewModel(
+            discovery: FakeAppDiscovering(result: .init(apps: [a, b], unreadableCount: 0)),
+            locator: locator,
+            orphanScanner: FakeOrphanScanning(result: .init(orphans: [], failedLocationIDs: [])),
+            exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "uvm-\(UUID().uuidString)")!),
+            history: history, trash: MockTrash(outcome: .trashed), home: home)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+
+        vm.openDetail(a)
+        await locator.gate.waitUntilStarted(index: 1)
+        let stale = vm.leftoverTask
+        vm.openDetail(b)
+        await locator.gate.waitUntilStarted(index: 2)
+        #expect(vm.isLoadingLeftovers)
+
+        await locator.gate.release(index: 1)       // A 的旧任务收尾:不得落地
+        await stale?.value
+        #expect(vm.detailAppID == b.bundleID)
+        #expect(vm.isLoadingLeftovers)              // 旧任务不得清掉新详情的加载态
+        #expect(vm.leftovers.isEmpty)
+
+        await locator.gate.release(index: 2)
+        await vm.leftoverTask?.value
+        #expect(!vm.isLoadingLeftovers)
+        #expect(vm.leftovers.map(\.path) == [bItem.path])
+    }
+
+    // 确认弹窗与提交之间的勾选变化不得改变提交范围:提交必须使用 requestUninstall 时的快照。
+    @Test func uninstallSubmitsSnapshotTakenAtConfirmation() async {
+        let app = makeTestApp(home: home)
+        let regen = leftover("Caches/com.example.foo", home: home, size: 10)
+        let user = leftover("Application Support/com.example.foo", home: home, size: 20,
+                            safety: .userData, locationID: "app-support")
+        let trash = MockTrash(outcome: .trashed)
+        let vm = makeVM(apps: [app], leftovers: ["com.example.foo": [regen, user]], trash: trash)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.openDetail(app); await vm.leftoverTask?.value
+
+        vm.selectedLeftoverPaths = [regen.path, user.path]
+        vm.requestUninstall()
+        vm.selectedLeftoverPaths = [regen.path]    // 确认后勾选集合被改动
+        vm.uninstall()
+        await vm.cleanTask?.value
+
+        #expect(await trash.calls == [app.appPath, regen.path, user.path])
+    }
+
+    // 取消确认必须丢弃快照:此后即使程序化把 confirmFlow 改回 .apps 也不得提交。
+    @Test func cancelConfirmClearsPendingSnapshot() async {
+        let app = makeTestApp(home: home)
+        let trash = MockTrash(outcome: .trashed)
+        let vm = makeVM(apps: [app], leftovers: ["com.example.foo": []], trash: trash)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.openDetail(app); await vm.leftoverTask?.value
+
+        vm.requestUninstall()
+        vm.cancelConfirm()
+        #expect(vm.confirmFlow == nil)
+        vm.confirmFlow = .apps
+        vm.uninstall()                              // 快照已清 → no-op
+        #expect(vm.cleanState == nil)
+        #expect(await trash.calls.isEmpty)
+    }
+
     @Test func uninstallSubmitsBundleAndSelectedLeftovers() async throws {
         let app = makeTestApp(home: home, size: 100)
         let regen = leftover("Caches/com.example.foo", home: home, size: 10)
@@ -419,6 +517,25 @@ final class UninstallViewModelTests {
         #expect(vm.phase == .discovering)
         vm.scanOrphans()                       // 发现未完成:必须 no-op
         await vm.discoveryTask?.value
+        #expect(scanner.scanCount == 0)
+        #expect(vm.orphanPhase == .idle)
+    }
+
+    // 发现被取消后 phase 会回到 .list,但 apps 并不完整;此时扫描必须同样 no-op。
+    @Test func scanOrphansIsNoOpAfterDiscoveryCancelled() async {
+        let scanner = RecordingOrphanScanner(
+            result: .init(orphans: [leftover("Caches/com.gone.app", home: home)],
+                          failedLocationIDs: []))
+        let vm = UninstallViewModel(
+            discovery: CancelFirstDiscovering(counter: CallCounter()),
+            locator: FakeLeftoverLocating(map: [:]),
+            orphanScanner: scanner,
+            exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "uvm-\(UUID().uuidString)")!),
+            history: history, trash: MockTrash(outcome: .trashed), home: home)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        #expect(vm.phase == .list)                  // 取消后回落 list,但发现未完成
+
+        vm.scanOrphans()                            // 必须 no-op,不能用空 apps 误判孤儿
         #expect(scanner.scanCount == 0)
         #expect(vm.orphanPhase == .idle)
     }

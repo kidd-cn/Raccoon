@@ -125,6 +125,17 @@ final class OrphanScannerTests {
         #expect(result.orphans.map(\.path) == [home.url.appendingPathComponent("Library/Caches/com.gone.app").path])
     }
 
+    // 位置槽位被链到用户数据目录时,孤儿分级同样取解析目标位置表中最严格的 safety。
+    @Test func locationSymlinkToUserDataFolderGradesOrphanAsUserData() async throws {
+        try home.makeDir("Library/Application Support/com.gone.app", bytes: 5)
+        try FileManager.default.createSymbolicLink(
+            at: home.url.appendingPathComponent("Library/Caches"),
+            withDestinationURL: home.url.appendingPathComponent("Library/Application Support"))
+        let result = await scan()
+        let viaCaches = result.orphans.first { $0.locationID == "caches" }
+        #expect(viaCaches?.safety == .userData)
+    }
+
     @Test func honorsResolvedFormExclusionForSymlinkedEntry() async throws {
         let target = try home.makeDir("Library/RealCaches/com.gone.app", bytes: 6)
         try home.makeDir("Library/Caches", bytes: 0)

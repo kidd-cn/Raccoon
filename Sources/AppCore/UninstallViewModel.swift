@@ -28,6 +28,8 @@ public final class UninstallViewModel {
     public var tab: Tab = .apps
 
     public private(set) var leftovers: [AppLeftover] = []
+    /// 详情页关联数据定位中:UI 必须显示加载态,而不是「没有发现关联数据」假空态。
+    public private(set) var isLoadingLeftovers = false
     public var selectedLeftoverPaths: Set<String> = []
 
     public private(set) var orphanPhase: OrphanPhase = .idle
@@ -58,6 +60,9 @@ public final class UninstallViewModel {
     var cleanTask: Task<Void, Never>?
     private var hasDiscovered = false
     private var orphanScanGeneration = 0
+    private var leftoverGeneration = 0
+    /// requestUninstall 时的提交快照:确认弹窗与提交之间勾选集合可能变化,提交口径须冻结。
+    private var pendingUninstall: (items: [CleanItem], app: InstalledApp)?
 
     public init(discovery: AppDiscovering, locator: LeftoverLocating, orphanScanner: OrphanScanning,
                 exclusions: ExclusionsStore, history: HistoryStoring,
@@ -81,6 +86,10 @@ public final class UninstallViewModel {
         phase = .discovering
         apps = []; unreadableCount = 0
         detailAppID = nil; leftovers = []; selectedLeftoverPaths = []
+        leftoverTask?.cancel()
+        leftoverGeneration &+= 1
+        isLoadingLeftovers = false
+        pendingUninstall = nil
         discoveryProgress = AppDiscoveryProgress(enumeratedCount: 0)
         let exclusionsSnapshot = exclusions.exclusions
         discoveryTask = Task { [weak self] in
@@ -126,16 +135,22 @@ public final class UninstallViewModel {
         detailAppID = app.bundleID
         leftovers = []
         selectedLeftoverPaths = []
+        isLoadingLeftovers = true
+        leftoverGeneration &+= 1
+        let gen = leftoverGeneration
         leftoverTask?.cancel()
         let exclusionsSnapshot = exclusions.exclusions
         leftoverTask = Task { [weak self] in
             guard let self else { return }
             let items = await self.locator.leftovers(for: app, exclusions: exclusionsSnapshot)
-            guard !Task.isCancelled else { return }
+            // 取消/切换应用后旧任务不得写回:代数与当前详情 ID 双重校验。
+            guard !Task.isCancelled, gen == self.leftoverGeneration,
+                  self.detailAppID == app.bundleID else { return }
             self.leftovers = items
             self.selectedLeftoverPaths = Set(items
                 .filter { $0.ownership == .bundleID && $0.safety == .regenerable }
                 .map(\.path))
+            self.isLoadingLeftovers = false
         }
     }
 
@@ -165,26 +180,39 @@ public final class UninstallViewModel {
     // MARK: - 卸载执行
 
     public func requestUninstall() {
-        guard cleanState == nil, !uninstallItems.isEmpty else { return }
+        guard cleanState == nil else { return }
+        guard let app = focusedApp else { return }
+        let items = uninstallItems
+        guard !items.isEmpty else { return }
+        // 冻结确认时的提交范围与本体:弹窗期间的勾选变化不得影响实际提交。
+        pendingUninstall = (items, app)
         confirmFlow = .apps
     }
 
-    public func cancelConfirm() { confirmFlow = nil }
-
-    public func uninstall() {
-        guard cleanState == nil else { return }
-        guard confirmFlow == .apps else { return }
-        let items = uninstallItems
-        guard !items.isEmpty else { return }
-        runClean(items, flow: .apps)
+    public func cancelConfirm() {
+        confirmFlow = nil
+        pendingUninstall = nil
     }
 
-    private func runClean(_ items: [CleanItem], flow: CleanFlow) {
+    public func uninstall() {
+        guard cleanState == nil, confirmFlow == .apps else { return }
+        guard let pending = pendingUninstall else { return }
+        pendingUninstall = nil
+        runClean(pending.items, flow: .apps, app: pending.app)
+    }
+
+    private func runClean(_ items: [CleanItem], flow: CleanFlow, app: InstalledApp?) {
         guard cleanState == nil else { return }
-        let uninstallingApp = flow == .apps ? focusedApp : nil
         // 与一期同理:明细页立即让位,否则导航栈上的详情会盖住清理进度与报告。
-        if flow == .apps { detailAppID = nil }
+        if flow == .apps {
+            detailAppID = nil
+            // 详情已退栈,未完成的定位不得再把结果或加载态写回。
+            leftoverTask?.cancel()
+            leftoverGeneration &+= 1
+            isLoadingLeftovers = false
+        }
         confirmFlow = nil
+        pendingUninstall = nil
         cleanState = .cleaning
         cleanFlow = flow
         cleanProgress = CleanProgress(done: 0, total: items.count)
@@ -203,7 +231,7 @@ public final class UninstallViewModel {
                 Logger(subsystem: "com.raccooncleaner.Raccoon", category: "history")
                     .error("history append failed: \(String(describing: error))")
             }
-            self.applyCleanOutcome(report, submitted: items, flow: flow, app: uninstallingApp)
+            self.applyCleanOutcome(report, submitted: items, flow: flow, app: app)
         }
     }
 
@@ -256,8 +284,9 @@ public final class UninstallViewModel {
 
     public func scanOrphans() {
         // 发现未完成时 apps 为空,已安装应用的可再生残留会被误判为孤儿并默认勾选;
-        // .list 是发现完成后的稳定态(详情态与列表态并存,不影响该判定)。
-        guard phase == .list, cleanState == nil, orphanPhase != .scanning else { return }
+        // 发现被取消后 phase 也会回到 .list,故必须同时要求 hasDiscovered(发现真正完成)。
+        guard phase == .list, hasDiscovered, cleanState == nil,
+              orphanPhase != .scanning else { return }
         orphanScanGeneration &+= 1
         let gen = orphanScanGeneration
         orphanPhase = .scanning
@@ -307,7 +336,7 @@ public final class UninstallViewModel {
         guard cleanState == nil, confirmFlow == .orphans else { return }
         let items = orphanCleanItems
         guard !items.isEmpty else { return }
-        runClean(items, flow: .orphans)
+        runClean(items, flow: .orphans, app: nil)
     }
 
     private var orphanCleanItems: [CleanItem] {

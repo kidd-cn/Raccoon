@@ -75,6 +75,7 @@
 "uninstall.group.unconfirmed" = "未确认归属";
 "uninstall.tag.unconfirmed" = "未确认";
 "uninstall.noLeftovers" = "没有发现关联数据";
+"uninstall.loadingLeftovers" = "正在查找关联数据…";
 "uninstall.version" = "版本 %@";
 "uninstall.button" = "卸载…";
 "uninstall.confirm.title" = "确认卸载";
