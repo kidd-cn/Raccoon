@@ -20,7 +20,9 @@ final class TempHome {
     func makeDir(_ relative: String, bytes: Int = 0) throws -> URL {
         let dir = url.appendingPathComponent(relative, isDirectory: true)
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        if bytes > 0 { _ = try makeFile("\(relative)/payload.bin", bytes: bytes) }
+        if bytes > 0 {
+            _ = try makeFile("\(relative)/payload-\(UUID().uuidString.prefix(8)).bin", bytes: bytes)
+        }
         return dir
     }
 
