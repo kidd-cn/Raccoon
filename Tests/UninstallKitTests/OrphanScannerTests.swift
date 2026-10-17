@@ -136,8 +136,7 @@ final class OrphanScannerTests {
     }
 
     @Test func installedBundleIDMatchingIsCaseInsensitive() async throws {
-        // 第一段顺带防御性覆盖 `seen` 去重:同一规范化路径(大小写不敏感)只应出现一次
-        // (当前位置表下重叠不可达,为未来位置表演进保留)。
+        // `seen` 去重在当前位置表下不可达,保留作未来位置表重叠时的防御。
         try home.makeDir("Library/Caches/com.gone.app", bytes: 1)
         let first = await scan()
         #expect(first.orphans.count == 1)
@@ -150,6 +149,20 @@ final class OrphanScannerTests {
     @Test func installedBundleIDCaseVariantIsNotOrphan() async throws {
         try home.makeDir("Library/Caches/com.alive.app", bytes: 1)
         let result = await scan(installedIDs: ["COM.ALIVE.APP"])
+        #expect(result.orphans.isEmpty)
+    }
+
+    @Test func installedBundleIDMatchingFoldsDiskNameCase() async throws {
+        // 磁盘名大写、已安装集合小写:候选侧也必须折叠
+        try home.makeDir("Library/Caches/COM.ALIVE.APP", bytes: 1)
+        let result = await scan(installedIDs: ["com.alive.app"])
+        #expect(result.orphans.isEmpty)
+    }
+
+    @Test func resolverLowercaseProbePreventsOrphanForUppercaseName() async throws {
+        // 目录名大写,LaunchServices 只认小写形态时也不得列为孤儿
+        try home.makeDir("Library/Caches/COM.ALIVE.APP", bytes: 1)
+        let result = await scan(resolver: Resolver(resolvable: ["com.alive.app"]))
         #expect(result.orphans.isEmpty)
     }
 
