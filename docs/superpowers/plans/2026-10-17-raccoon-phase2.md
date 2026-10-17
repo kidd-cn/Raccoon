@@ -440,7 +440,7 @@ final class LeftoverLocationsTests {
         ])
         #expect(byID["caches"]?.safety == .regenerable)
         #expect(byID["logs"]?.safety == .regenerable)
-        #expect(byID["webkit"]?.safety == .regenerable)
+        #expect(byID["webkit"]?.safety == .userData)
         #expect(byID["httpstorages"]?.safety == .regenerable)
         #expect(byID["saved-state"]?.safety == .regenerable)
         #expect(byID["launch-agents"]?.safety == .regenerable)
@@ -515,7 +515,7 @@ public enum LeftoverLocations {
         .init(id: "logs", folder: "Logs", match: .exact, safety: .regenerable),
         .init(id: "logs-name", folder: "Logs", match: .appName, safety: .regenerable),
         .init(id: "saved-state", folder: "Saved Application State", match: .exactSuffixed(".savedState"), safety: .regenerable),
-        .init(id: "webkit", folder: "WebKit", match: .exact, safety: .regenerable),
+        .init(id: "webkit", folder: "WebKit", match: .exact, safety: .userData),
     ]
 
     /// 明确不列出的受保护位置:一期硬保护整棵覆盖(Preferences / Cookies)。

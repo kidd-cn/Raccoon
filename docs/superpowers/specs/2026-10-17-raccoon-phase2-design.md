@@ -167,7 +167,7 @@ public protocol RunningAppChecking: Sendable {
 | -- | ---- | ---- | ---- | ---- |
 | `caches` | `Caches/<id>` | 精确 | 可再生 | 缓存,应用会重建 |
 | `logs` | `Logs/<id>` | 精确 | 可再生 | 日志 |
-| `webkit` | `WebKit/<id>` | 精确 | 可再生 | 网页数据缓存 |
+| `webkit` | `WebKit/<id>` | 精确 | 需确认 | 含 LocalStorage/IndexedDB 等网页本地数据,可能与站点登录态/离线内容相关 |
 | `httpstorages` | `HTTPStorages/<id>` | 精确 | 可再生 | HTTP 存储(缓存+部分状态) |
 | `saved-state` | `Saved Application State/<id>.savedState` | 精确(`.savedState` 后缀) | 可再生 | 窗口恢复状态 |
 | `launch-agents` | `LaunchAgents/<id>.plist` | 精确(`.plist` 后缀) | 可再生 | 用户级登录启动项注册 |

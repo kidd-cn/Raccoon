@@ -6,6 +6,9 @@ import CleanKit
 @Suite
 final class LeftoverLocationsTests {
     @Test func tableHasExpectedIDsAndGrading() {
+        let ids = LeftoverLocations.all.map(\.id)
+        #expect(Set(ids).count == ids.count)   // 唯一
+        #expect(ids == ids.sorted())           // 有序:Task 5/6 的「先命中者胜出」依赖此不变量
         let byID = Dictionary(uniqueKeysWithValues: LeftoverLocations.all.map { ($0.id, $0) })
         #expect(Set(byID.keys) == [
             "caches", "logs", "webkit", "httpstorages", "saved-state", "launch-agents",
@@ -14,7 +17,7 @@ final class LeftoverLocationsTests {
         ])
         #expect(byID["caches"]?.safety == .regenerable)
         #expect(byID["logs"]?.safety == .regenerable)
-        #expect(byID["webkit"]?.safety == .regenerable)
+        #expect(byID["webkit"]?.safety == .userData)
         #expect(byID["httpstorages"]?.safety == .regenerable)
         #expect(byID["saved-state"]?.safety == .regenerable)
         #expect(byID["launch-agents"]?.safety == .regenerable)
@@ -29,6 +32,31 @@ final class LeftoverLocationsTests {
         #expect(byID["group-containers"]?.match == .groupContainer)
         #expect(byID["app-support-name"]?.match == .appName)
         #expect(byID["logs-name"]?.match == .appName)
+        let folders = Dictionary(grouping: LeftoverLocations.all, by: \.id).mapValues { $0[0].folder }
+        #expect(folders == [
+            "app-scripts": "Application Scripts",
+            "app-support": "Application Support",
+            "app-support-name": "Application Support",
+            "caches": "Caches",
+            "containers": "Containers",
+            "group-containers": "Group Containers",
+            "httpstorages": "HTTPStorages",
+            "launch-agents": "LaunchAgents",
+            "logs": "Logs",
+            "logs-name": "Logs",
+            "saved-state": "Saved Application State",
+            "webkit": "WebKit",
+        ])
+    }
+
+    @Test func excludedFoldersNeverEnterTableAndAreDenied() {
+        let folders = Set(LeftoverLocations.all.map(\.folder))
+        #expect(folders.isDisjoint(with: LeftoverLocations.excludedFolders))
+        let protection = ProtectionStore()
+        let home = NSHomeDirectory()
+        for folder in LeftoverLocations.excludedFolders {
+            #expect(protection.isDenied("\(home)/Library/\(folder)/com.example.foo"))
+        }
     }
 
     // 事实断言:一期硬保护整棵覆盖 Preferences/Cookies,二期不列出这两处(列了也删不掉)。
@@ -38,5 +66,6 @@ final class LeftoverLocationsTests {
         let protection = ProtectionStore()
         #expect(protection.isDenied("\(home)/Library/Preferences/com.example.foo.plist"))
         #expect(protection.isDenied("\(home)/Library/Cookies/com.example.foo.binarycookies"))
+        #expect(!protection.isDenied("\(home)/Library/Caches/com.example.foo"))
     }
 }

@@ -33,12 +33,12 @@ public enum LeftoverLocations {
         .init(id: "httpstorages", folder: "HTTPStorages", match: .exact, safety: .regenerable),
         .init(id: "launch-agents", folder: "LaunchAgents", match: .exactSuffixed(".plist"), safety: .regenerable),
         .init(id: "logs", folder: "Logs", match: .exact, safety: .regenerable),
-        .init(id: "logs-name", folder: "Logs", match: .appName, safety: .regenerable),
+        .init(id: "logs-name", folder: "Logs", match: .appName, safety: .regenerable), // 低置信:即使可再生也永不默认勾选(默认勾选 = 可再生 且 Bundle ID 归属)
         .init(id: "saved-state", folder: "Saved Application State", match: .exactSuffixed(".savedState"), safety: .regenerable),
-        .init(id: "webkit", folder: "WebKit", match: .exact, safety: .regenerable),
+        .init(id: "webkit", folder: "WebKit", match: .exact, safety: .userData), // 含 LocalStorage/IndexedDB 等网页本地数据,按需确认处理
     ]
 
     /// 明确不列出的受保护位置:一期硬保护整棵覆盖(Preferences / Cookies)。
     /// 放开需改动门 1(窄口豁免 + 回归测试),已列为三期候选。
-    public static let excludedFolders = ["Preferences", "Cookies"]
+    public static let excludedFolders: Set<String> = ["Preferences", "Cookies"]
 }
