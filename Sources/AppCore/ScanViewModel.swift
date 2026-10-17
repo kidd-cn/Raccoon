@@ -34,7 +34,8 @@ public final class ScanViewModel {
     // (否则硬编码真实服务会对不存在的 /a 真调 trashItem → .vanished → trashedCount 断言必红)
     public let trash: TrashServicing
     // 类别过滤:主清理页 = 全集去 .ai,AI 页 = [.ai];nil = 不过滤(测试与回归用)。
-    // 两页共用同一引擎,凭此参数互不相混——AI 条目与 AI 类别卡片在主页面绝口不提,反之亦然。
+    // 两页共用同一引擎,凭此参数互不相混——AI 条目与 AI 类别卡片在主页面绝口不提,反之亦然;
+    // Task 5 接线两页(接线落地前 RootView 仍传 nil)。
     public let categoryFilter: Set<RuleCategory>?
 
     // 供测试等待(内部可见)

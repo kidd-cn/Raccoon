@@ -314,7 +314,7 @@ final class ScanViewModelTests {
         vm.startScan()
         await vm.task?.value
         #expect(vm.hits.map(\.path) == ["/ai1"])
-        #expect(vm.summaries.map(\.category) == [.ai])
+        #expect(vm.summaries == [.init(category: .ai, totalBytes: 100, hitCount: 1)])
     }
 
     @Test func categoryFilter_mainPageExcludesAI() async {
