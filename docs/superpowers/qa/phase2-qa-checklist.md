@@ -204,7 +204,7 @@
 | 15.4 全程无提权、无 `rm`/unlink;`CleanExecutor` 仍是唯一删除路径 | ✅ | A3 / A5 / A9 | `grep -rn "removeItem\|unlink" Sources` 仅命中 `Sources/CleanKit/TrashService.swift:18` 的注释「绝不 unlink」,无任何实现调用;`removeItem` 零命中。文件删除唯一实现为 `Sources/CleanKit/TrashService.swift:21` 的 `FileManager.trashItem`;本地快照清理沿用一期 `tmutil deletelocalsnapshots` 例外(README 门 4 已载明),不属于文件删除实现。无提权代码模式(AuthorizationExecute/SMJobBless/sudo/NSAppleScript 等均无命中)。测试:`testClean_securityRegression_neverTrashesProtectedEvenIfInjected`(`Tests/CleanKitTests/CleanExecutorTests.swift`)、`testClean_aggregatesReport_andSkipsProtected`、`testFileManagerTrashService_trashesTempFile`(`Tests/CleanKitTests/TrashServiceTests.swift`)。 |
 | 15.5 四道门在二期路径有自动化锚点(硬保护、排除清单、分级、trash-only),恶意/越界用例回归 | ✅ | A1–A7 / A9 | 门 1:A6 + A5;门 2:A1/A2;门 3:A2/A4;门 4:见 15.4;恶意/越界:A5/A9。 |
 | 15.6 中英双语、浅色/深色适配 | 混合 | H1 / H2 + M5 | 自动:zh/en 各 94 键、键集 diff 为空;人工:H1/H2/M5 目视切换语言与外观。 |
-| 15.7 `Scripts/test.sh` 全绿、CI 绿、L10n 键集 1:1 | 混合 | H1 + 统计 | 本地 **183/183 全绿**、L10n **94:94** 已实测(H1 自动半段);**CI 未在 `feat/phase2` 运行(该分支无 upstream、尚未推送),待推送后验证,不得标绿**。 |
+| 15.7 `Scripts/test.sh` 全绿、CI 绿、L10n 键集 1:1 | 混合 | H1 + 统计 | 本地 **183/183 全绿**、L10n **94:94** 已实测(H1 自动半段);**合并推送后在 `main` 实测绿**(CI run `39017706933`:构建、测试、L10n 键集一致性均通过);`feat/phase2` 分支本身未单独跑 CI。 |
 | 15.8 README 与 QA 清单如实标注人工项与已知限制(§8.4、§14) | ✅ | 本文档 + README | README 新增「已知限制」段;本清单分列 ✅/⏳/混合,并在「已知测试缺口」记录未覆盖面。 |
 
 ## 统计

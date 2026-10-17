@@ -32,15 +32,15 @@
 
 ## 3. 关键决策
 
-| # | 决策 | 结论 | 理由 |
-| - | ---- | ---- | ---- |
-| D1 | 「残留清理」范围 | **两者都做**:卸载时连带清理关联数据 + 独立的孤儿残留扫描 | 标题主干是卸载,而孤儿发现与卸载共用同一套位置表,同批实现成本最低 |
-| D2 | 关联数据默认勾选 | **分级勾选**:可再生的默认勾选;Application Support / Containers / Group Containers / Application Scripts 默认不勾、橙色、确认弹窗单独分区 | 与一期 cautious 同口径;这些位置可能含用户文档与登录态 |
-| D3 | 权限边界 | **只做用户域,不引入任何提权**;系统级残留记为三期 | 提权后无法再走 `trashItem` 的「唯一删除实现」,核心承诺会被迫降级;二期不值得为此改安全模型 |
-| D4 | 孤儿判定口径 | **Bundle ID 精确匹配为主;名称相似但无法确认归属的进「未确认归属」分区**,默认不勾 | 误报近零是安全工具的前提;覆盖不全作为已知代价显式声明 |
-| D5 | 位置表形态 | **代码内静态表(`LeftoverLocations`)+ 测试强制分级完备**,不用 JSON | 位置是全局 schema 而非逐应用数据,社区无需逐条贡献;类型化+测试比 JSON 更稳 |
-| D6 | 执行引擎 | **直接复用 `CleanExecutor`**,不新写删除路径 | 「唯一删除实现」是核心不变量,复用即继承删除前 `isDenied` 复核 |
-| D7 | UI 归属 | 侧边栏「卸载」模块内两页:应用列表/详情 + 残留扫描;报告页抽为共用视图 | 六期骨架早已预留该模块;报告形态复用避免第二套文案与逻辑 |
+| #  | 决策       | 结论                                                                                                           | 理由                                                   |
+| -- | -------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| D1 | 「残留清理」范围 | **两者都做**:卸载时连带清理关联数据 + 独立的孤儿残留扫描                                                                             | 标题主干是卸载,而孤儿发现与卸载共用同一套位置表,同批实现成本最低                    |
+| D2 | 关联数据默认勾选 | **分级勾选**:可再生的默认勾选;Application Support / Containers / Group Containers / Application Scripts 默认不勾、橙色、确认弹窗单独分区 | 与一期 cautious 同口径;这些位置可能含用户文档与登录态                     |
+| D3 | 权限边界     | **只做用户域,不引入任何提权**;系统级残留记为三期                                                                                  | 提权后无法再走 `trashItem` 的「唯一删除实现」,核心承诺会被迫降级;二期不值得为此改安全模型 |
+| D4 | 孤儿判定口径   | **Bundle ID 精确匹配为主;名称相似但无法确认归属的进「未确认归属」分区**,默认不勾                                                             | 误报近零是安全工具的前提;覆盖不全作为已知代价显式声明                          |
+| D5 | 位置表形态    | **代码内静态表(`LeftoverLocations`)+ 测试强制分级完备**,不用 JSON                                                            | 位置是全局 schema 而非逐应用数据,社区无需逐条贡献;类型化+测试比 JSON 更稳        |
+| D6 | 执行引擎     | **直接复用 `CleanExecutor`**,不新写删除路径                                                                             | 「唯一删除实现」是核心不变量,复用即继承删除前 `isDenied` 复核                |
+| D7 | UI 归属    | 侧边栏「卸载」模块内两页:应用列表/详情 + 残留扫描;报告页抽为共用视图                                                                        | 六期骨架早已预留该模块;报告形态复用避免第二套文案与逻辑                         |
 
 ## 4. 总体架构
 
@@ -163,21 +163,21 @@ public protocol RunningAppChecking: Sendable {
 
 位置一律相对 `~/Library`(主目录注入)。`<id>` 指 Bundle ID,`<name>` 指应用名。
 
-| id | 相对路径 | 匹配 | 分级 | 说明 |
-| -- | ---- | ---- | ---- | ---- |
-| `caches` | `Caches/<id>` | 精确 | 可再生 | 缓存,应用会重建 |
-| `logs` | `Logs/<id>` | 精确 | 可再生 | 日志 |
-| `webkit` | `WebKit/<id>` | 精确 | 需确认 | 含 LocalStorage/IndexedDB 等网页本地数据,可能与站点登录态/离线内容相关 |
-| `httpstorages` | `HTTPStorages/<id>` | 精确 | 可再生 | HTTP 存储(缓存+部分状态) |
-| `saved-state` | `Saved Application State/<id>.savedState` | 精确(`.savedState` 后缀) | 可再生 | 窗口恢复状态 |
-| `launch-agents` | `LaunchAgents/<id>.plist` | 精确(`.plist` 后缀) | 可再生 | 用户级登录启动项注册 |
-| `app-support` | `Application Support/<id>` | 精确 | 需确认 | 可能含本地数据库、配置、离线内容 |
-| `containers` | `Containers/<id>` | 精确 | 需确认 | 沙盒容器;可能含应用文档 |
-| `group-containers` | `Group Containers/<id>` 及 `Group Containers/*.<id>` | 精确 + 组容器命名约定 | 需确认 | 应用组共享数据 |
-| `app-scripts` | `Application Scripts/<id>` | 精确 | 需确认 | 用户脚本(内容由用户创建) |
-| `app-support-name` | `Application Support/<name>` | 低置信(§8.3) | 需确认 | 无法确认归属,恒为未确认分区 |
-| `logs-name` | `Logs/<name>` | 低置信(§8.3) | 可再生 | 同上,但日志本身可再生 |
-| **不列出** | `Preferences/<id>.plist`、`Cookies/*` | — | — | 见 §8.4:一期硬保护整棵覆盖,列了也删不掉 |
+| id                 | 相对路径                                                | 匹配                   | 分级  | 说明                      |
+| ------------------ | --------------------------------------------------- | -------------------- | --- | ----------------------- |
+| `caches`           | `Caches/<id>`                                       | 精确                   | 可再生 | 缓存,应用会重建                |
+| `logs`             | `Logs/<id>`                                         | 精确                   | 可再生 | 日志                      |
+| `webkit`           | `WebKit/<id>`                                       | 精确                   | 需确认 | 含 LocalStorage/IndexedDB 等网页本地数据,可能与站点登录态/离线内容相关 |
+| `httpstorages`     | `HTTPStorages/<id>`                                 | 精确                   | 可再生 | HTTP 存储(缓存+部分状态)        |
+| `saved-state`      | `Saved Application State/<id>.savedState`           | 精确(`.savedState` 后缀) | 可再生 | 窗口恢复状态                  |
+| `launch-agents`    | `LaunchAgents/<id>.plist`                           | 精确(`.plist` 后缀)      | 可再生 | 用户级登录启动项注册              |
+| `app-support`      | `Application Support/<id>`                          | 精确                   | 需确认 | 可能含本地数据库、配置、离线内容        |
+| `containers`       | `Containers/<id>`                                   | 精确                   | 需确认 | 沙盒容器;可能含应用文档            |
+| `group-containers` | `Group Containers/<id>` 及 `Group Containers/*.<id>` | 精确 + 组容器命名约定         | 需确认 | 应用组共享数据                 |
+| `app-scripts`      | `Application Scripts/<id>`                          | 精确                   | 需确认 | 用户脚本(内容由用户创建)           |
+| `app-support-name` | `Application Support/<name>`                        | 低置信(§8.3)            | 需确认 | 无法确认归属,恒为未确认分区          |
+| `logs-name`        | `Logs/<name>`                                       | 低置信(§8.3)            | 可再生 | 同上,但日志本身可再生             |
+| **不列出**            | `Preferences/<id>.plist`、`Cookies/*`                | —                    | —   | 见 §8.4:一期硬保护整棵覆盖,列了也删不掉 |
 
 规则:
 
@@ -249,6 +249,7 @@ public protocol RunningAppChecking: Sendable {
   - 残留页:同「提交 − skipped」收敛。
 - 报告页「返回列表」保留收敛后的状态,不强制重扫(沿用一期「部分清理后继续」的设计)。
 - 卸载与残留清理的报告与一期共用同一 `JSONHistoryStore` 与同一历史文件;主页「上次清理释放 X」覆盖三类来源,因此 §13 的 200 条上限属于本期的必要配套,而非可选优化。
+
 
 ## 10. UI 设计
 
