@@ -24,6 +24,7 @@
 "category.system" = "系统垃圾";
 "category.dev" = "开发工具缓存";
 "category.apps" = "应用缓存";
+"category.ai" = "AI 工具";
 "category.cautious" = "谨慎清理";
 "category.items" = "%d 项";
 "detail.title" = "清理明细";

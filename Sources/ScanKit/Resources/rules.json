@@ -113,7 +113,7 @@
      "description": {"zh-Hans": "Codex CLI 系统缓存", "en": "Codex CLI system cache"}},
     {"id": "ai.codex-runtimes", "category": "ai", "safety": "cautious", "tool": "codex",
      "path": "~/.cache/codex-runtimes",
-     "description": {"zh-Hans": "Codex CLI 运行时,可重新下载但体积大(实测 3.6G),请确认后清理", "en": "Codex CLI runtimes; re-downloadable but large, review before cleaning"}},
+     "description": {"zh-Hans": "Codex CLI 运行时,可重新下载但动辄数 GB,请确认后清理", "en": "Codex CLI runtimes; re-downloadable but large, review before cleaning"}},
     {"id": "ai.ollama-logs", "category": "ai", "safety": "safe", "tool": "ollama",
      "path": "~/.ollama/logs",
      "description": {"zh-Hans": "Ollama 日志", "en": "Ollama logs"}},

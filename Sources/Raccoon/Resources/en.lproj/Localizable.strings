@@ -24,6 +24,7 @@
 "category.system" = "System Junk";
 "category.dev" = "Developer Caches";
 "category.apps" = "App Caches";
+"category.ai" = "AI Tools";
 "category.cautious" = "Caution Items";
 "category.items" = "%d items";
 "detail.title" = "Cleanup Details";
