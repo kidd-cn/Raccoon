@@ -21,7 +21,35 @@ public struct FileManagerTrashService: TrashServicing {
             try fm.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)
             return .trashed
         } catch {
-            return TrashService.map(error: error as NSError)
+            let mapped = TrashService.map(error: error as NSError)
+            // /Applications 下 root/admin 归属的应用,直接 trashItem 会报权限不足;
+            // 降级经 Finder 删除:与用户手动拖入废纸篓同路径,系统会按需弹管理员授权框。
+            if case .skipped(let reason) = mapped, reason == "no-permission",
+               await Self.trashViaFinder(path) {
+                return .trashed
+            }
+            return mapped
+        }
+    }
+
+    /// 经 Finder 移入废纸篓(osascript)。Finder 需要授权时会自行弹系统弹窗;
+    /// 授权等待可能很长,故在后台队列阻塞等待,不占用协作线程池。
+    static func trashViaFinder(_ path: String) async -> Bool {
+        let escaped = path
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        let script = "tell application \"Finder\" to delete POSIX file \"\(escaped)\""
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                let proc = Process()
+                proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+                proc.arguments = ["-e", script]
+                proc.standardOutput = FileHandle.nullDevice
+                proc.standardError = FileHandle.nullDevice
+                do { try proc.run() } catch { continuation.resume(returning: false); return }
+                proc.waitUntilExit()
+                continuation.resume(returning: proc.terminationStatus == 0)
+            }
         }
     }
 }
