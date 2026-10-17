@@ -3033,15 +3033,16 @@ Expected: 构建成功;测试全绿;键集 diff 无输出;工作区干净。
 - [ ] **Step 2: 安全自查(逐条 grep,贴出结果)**
 
 ```bash
-grep -rn "removeItem\|unlink" Sources | grep -v "JSONHistoryStore\|history-corrupted" || true
+grep -rn "removeItem\|unlink" Sources
 grep -rn "trashItem" Sources
 grep -rn "NSHomeDirectory()" Sources/UninstallKit || true
 ```
 
 Expected:
-- `Sources/UninstallKit` 内无删除实现;`trashItem` 仍只出现在 `Sources/CleanKit/TrashService.swift`。
+- 第一条预期输出**仅 1 行**:`Sources/CleanKit/TrashService.swift:18` 的注释「唯一删除动作:移入废纸篓。绝不 unlink。」,属预期命中;无任何实现调用;`removeItem` 零命中。`removeItem`/`unlink` 的实现调用必须为零。
+- `Sources/UninstallKit` 内无删除实现;`trashItem` 唯一实现仍在 `Sources/CleanKit/TrashService.swift:21`。
 - `Sources/UninstallKit` 内无 `NSHomeDirectory()`(根目录全部注入;`grep` 无输出)。
-- 若 `removeItem` 命中,除历史文件备份外必须为零。
+- 本地快照清理沿用一期 `tmutil deletelocalsnapshots` 例外,不属于文件删除实现。
 
 - [ ] **Step 3: 终审**
 
@@ -3087,5 +3088,5 @@ Task 1–13 已完成并通过逐任务规格审 + 质量审;Task 14 文档/QA �
 - 可选测试强化:一期清理进度中间态(3 项 + 门控 trash,断言中途 `done == 1`);二期清理进度中间态同法补齐;`HistoryStoreTests` 临时目录清理。
 - 已知缺口:二期清理进度无专测断言中间态;确认弹窗 Return/Esc 快捷键与 `LeftoverRow` 双触发需真机验证,详见 QA 清单「已知测试缺口」。
 
-Task 14 文档已按文档审修订;Task 15 终审随后执行并补充最终状态。
+Task 14 文档已按文档审修订;Task 15 终审随后执行并补充最终状态。文档按第二轮质量审修订了 15.4 的 grep 证据、M3 权限恢复与空态条件、§14 措辞,并同步 Task 15 安全自查预期。
 

@@ -107,8 +107,8 @@
 - **造数步骤**:
   1. 创建无主残留:`mkdir -p ~/Library/Caches/com.example.nonexistent-raccoon-test && printf 'orphan' > ~/Library/Caches/com.example.nonexistent-raccoon-test/test-orphan.bin`。
   2. 打开「卸载」→「孤儿残留」→ 扫描;该目录应归入「已确认归属(高置信)」组。
-  3. **失败位置**:临时执行 `chmod 000 ~/Library/Caches` 制造枚举失败 → 重新扫描 → 确认底部失败位置以目录名(如 `Caches`)展示 → 恢复 `chmod 755 ~/Library/Caches`。
-  4. 空态:删除第 1 步造数目录后复扫,应显示空态。
+  3. **失败位置**:临时执行 `chmod 000 ~/Library/Caches` 制造枚举失败 → 重新扫描 → 确认底部失败位置以目录名(如 `Caches`)展示 → 先记录原权限(`stat -f %A ~/Library/Caches`,实测默认 `700`)并用同值恢复(通常 `chmod 700 ~/Library/Caches`)。
+  4. 空态:删除第 1 步造数目录后复扫:若无其他真实孤儿残留应显示空态;否则至少确认该造数目录已从结果消失。
 - 预期:真实无主残留出现;「已确认归属(高置信)」与「未确认归属」分组正确;未确认项默认不勾选;失败位置以目录名展示;空库时显示空态。
 - 自动半段见 A4/A10。
 
@@ -178,7 +178,7 @@
 
 ## 已知限制
 
-引用 spec §8.4 与 §14:
+引用 spec §8.4 与 §14 主要边界(§14.1/§14.3/§14.4):
 
 1. **`~/Library/Preferences`、`~/Library/Cookies`**:一期门 1 整棵保护,二期不列出这两处的关联数据;放开需改门 1(窄口豁免 + 回归测试),列为三期候选,二期不动安全模型。
 2. **系统级 `/Library` 残留与任何提权**:二期不做,不引入管理员授权;列为三期候选。
@@ -194,7 +194,7 @@
 | 15.1 `swift run` 列出 `/Applications` 与 `~/Applications` 应用(排除 Apple/非应用),详情展示分级数据,`Preferences`/`Cookies` 不出现 | 混合 | A1 / A6 + M5 / M7 | 自动:发现过滤与去重(A1)、Preferences/Cookies 硬保护事实(A6);人工:M5 目视详情分组与两处不出现,M7 验证列表/详情导航。 |
 | 15.2 真实卸载:本体与勾选数据进废纸篓且可放回,报告数字一致,userData 分区默认不勾 | ⏳ 待人工 | M1 | 见 M1 造数与步骤。A2/A3 只证明默认勾选与提交口径,不替代废纸篓放回与数字目视。 |
 | 15.3 真机孤儿扫描发现真实无主残留,高置信/未确认分组正确,默认仅勾「高置信 + 可再生」 | 混合 | A4 / A5 + M3 | 自动:默认勾选、排序、跳过收敛与作用域(A4/A5);人工:M3 造数、分组与失败位置展示。 |
-| 15.4 全程无提权、无 `rm`/unlink;`CleanExecutor` 仍是唯一删除路径 | ✅ | A3 / A5 / A9 | `grep -rn "removeItem\|unlink" Sources` 无命中;唯一删除实现为 `Sources/CleanKit/TrashService.swift:21` 的 `FileManager.trashItem`;无提权代码模式(AuthorizationExecute/SMJobBless/sudo/NSAppleScript 等均无命中)。测试:`testClean_securityRegression_neverTrashesProtectedEvenIfInjected`(`Tests/CleanKitTests/CleanExecutorTests.swift:63`)、`testClean_aggregatesReport_andSkipsProtected`(:44)、`testFileManagerTrashService_trashesTempFile`(`Tests/CleanKitTests/TrashServiceTests.swift:21`)。 |
+| 15.4 全程无提权、无 `rm`/unlink;`CleanExecutor` 仍是唯一删除路径 | ✅ | A3 / A5 / A9 | `grep -rn "removeItem\|unlink" Sources` 仅命中 `Sources/CleanKit/TrashService.swift:18` 的注释「绝不 unlink」,无任何实现调用;`removeItem` 零命中。文件删除唯一实现为 `Sources/CleanKit/TrashService.swift:21` 的 `FileManager.trashItem`;本地快照清理沿用一期 `tmutil deletelocalsnapshots` 例外(README 门 4 已载明),不属于文件删除实现。无提权代码模式(AuthorizationExecute/SMJobBless/sudo/NSAppleScript 等均无命中)。测试:`testClean_securityRegression_neverTrashesProtectedEvenIfInjected`(`Tests/CleanKitTests/CleanExecutorTests.swift:63`)、`testClean_aggregatesReport_andSkipsProtected`(:44)、`testFileManagerTrashService_trashesTempFile`(`Tests/CleanKitTests/TrashServiceTests.swift:21`)。 |
 | 15.5 四道门在二期路径有自动化锚点(硬保护、排除清单、分级、trash-only),恶意/越界用例回归 | ✅ | A1–A7 / A9 | 门 1:A6 + A5;门 2:A1/A2;门 3:A2/A4;门 4:见 15.4;恶意/越界:A5/A9。 |
 | 15.6 中英双语、浅色/深色适配 | 混合 | H1 / H2 + M5 | 自动:zh/en 各 93 键、键集 diff 为空;人工:H1/H2/M5 目视切换语言与外观。 |
 | 15.7 `Scripts/test.sh` 全绿、CI 绿、L10n 键集 1:1 | 混合 | H1 + 统计 | 本地 **175/175 全绿**、L10n **93:93** 已实测(H1 自动半段);**CI 未在 `feat/phase2` 运行(该分支无 upstream、尚未推送),待推送后验证,不得标绿**。 |
