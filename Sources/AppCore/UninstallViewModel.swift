@@ -55,6 +55,7 @@ public final class UninstallViewModel {
     var orphanTask: Task<Void, Never>?
     var cleanTask: Task<Void, Never>?
     private var hasDiscovered = false
+    private var orphanScanGeneration = 0
 
     public init(discovery: AppDiscovering, locator: LeftoverLocating, orphanScanner: OrphanScanning,
                 exclusions: ExclusionsStore, history: HistoryStoring,
@@ -243,7 +244,11 @@ public final class UninstallViewModel {
     public func selectNoneOrphans() { selectedOrphanPaths = [] }
 
     public func scanOrphans() {
-        guard orphanPhase != .scanning else { return }
+        // 发现未完成时 apps 为空,已安装应用的可再生残留会被误判为孤儿并默认勾选;
+        // .list 是发现完成后的稳定态(详情态与列表态并存,不影响该判定)。
+        guard phase == .list, cleanState == nil, orphanPhase != .scanning else { return }
+        orphanScanGeneration &+= 1
+        let gen = orphanScanGeneration
         orphanPhase = .scanning
         orphans = []; selectedOrphanPaths = []; failedLocationIDs = []
         orphanProgress = OrphanScanProgress(completedLocations: 0,
@@ -253,14 +258,19 @@ public final class UninstallViewModel {
         let exclusionsSnapshot = exclusions.exclusions
         orphanTask = Task { [weak self] in
             guard let self else { return }
+            defer { self.orphanTask = nil }
             let result = await self.orphanScanner.scan(
                 installedBundleIDs: ids,
                 installedAppNames: names,
                 exclusions: exclusionsSnapshot
             ) { [weak self] p in
-                Task { @MainActor [weak self] in self?.orphanProgress = p }
+                Task { @MainActor [weak self] in
+                    guard let self, gen == self.orphanScanGeneration else { return }
+                    self.orphanProgress = p
+                }
             }
-            guard !Task.isCancelled else { return }
+            // 取消或新一轮扫描都会推进代数:旧任务的结果与进度一律丢弃。
+            guard gen == self.orphanScanGeneration, !Task.isCancelled else { return }
             self.orphans = result.orphans.sorted { $0.sizeBytes > $1.sizeBytes }
             self.selectedOrphanPaths = Set(self.orphans
                 .filter { $0.ownership == .bundleID && $0.safety == .regenerable }
@@ -271,6 +281,8 @@ public final class UninstallViewModel {
     }
 
     public func cancelOrphanScan() {
+        guard orphanPhase == .scanning else { return }
+        orphanScanGeneration &+= 1
         orphanTask?.cancel()
         orphanPhase = .idle
     }
@@ -281,7 +293,7 @@ public final class UninstallViewModel {
     }
 
     public func cleanOrphans() {
-        guard confirmFlow == .orphans else { return }
+        guard cleanState == nil, confirmFlow == .orphans else { return }
         let items = orphanCleanItems
         guard !items.isEmpty else { return }
         runClean(items, flow: .orphans)

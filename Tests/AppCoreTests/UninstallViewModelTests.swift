@@ -367,16 +367,116 @@ final class UninstallViewModelTests {
     @Test func orphanScanPassesInstalledSetsFromDiscovery() async {
         let app = makeTestApp(bundleID: "com.example.foo", name: "Foo", home: home)
         let scanner = RecordingOrphanScanner(result: .init(orphans: [], failedLocationIDs: []))
+        let excluded = home.appendingPathComponent("Library/Caches/keep").path
+        let exclusions = ExclusionsStore(defaults: UserDefaults(suiteName: "uvm-\(UUID().uuidString)")!)
+        exclusions.add(excluded)
         let vm = UninstallViewModel(
             discovery: FakeAppDiscovering(result: .init(apps: [app], unreadableCount: 0)),
             locator: FakeLeftoverLocating(map: [:]),
             orphanScanner: scanner,
-            exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "uvm-\(UUID().uuidString)")!),
+            exclusions: exclusions,
             history: history, trash: MockTrash(outcome: .trashed), home: home)
         vm.startDiscovery(); await vm.discoveryTask?.value
         vm.scanOrphans(); await vm.orphanTask?.value
         #expect(scanner.recordedIDs == ["com.example.foo"])
         #expect(scanner.recordedNames == ["Foo"])
+        #expect(scanner.recordedExclusions == [excluded])
+    }
+
+    // 发现未完成时扫描会拿空已安装集合,已安装应用的可再生残留会被误判孤儿并默认勾选。
+    @Test func scanOrphansIsNoOpBeforeDiscoveryCompletes() async {
+        let scanner = RecordingOrphanScanner(
+            result: .init(orphans: [leftover("Caches/com.gone.app", home: home)],
+                          failedLocationIDs: []))
+        let vm = UninstallViewModel(
+            discovery: FakeAppDiscovering(result: .init(apps: [], unreadableCount: 0)),
+            locator: FakeLeftoverLocating(map: [:]),
+            orphanScanner: scanner,
+            exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "uvm-\(UUID().uuidString)")!),
+            history: history, trash: MockTrash(outcome: .trashed), home: home)
+        vm.startDiscovery()
+        #expect(vm.phase == .discovering)
+        vm.scanOrphans()                       // 发现未完成:必须 no-op
+        await vm.discoveryTask?.value
+        #expect(scanner.scanCount == 0)
+        #expect(vm.orphanPhase == .idle)
+    }
+
+    // 取消后仍在途的进度回调不得覆盖已复位/新一轮扫描的进度。
+    @Test func staleProgressAfterCancelIsIgnored() async {
+        let scanner = GatedOrphanScanner(result: .init(orphans: [], failedLocationIDs: []))
+        let vm = UninstallViewModel(
+            discovery: FakeAppDiscovering(result: .init(apps: [], unreadableCount: 0)),
+            locator: FakeLeftoverLocating(map: [:]),
+            orphanScanner: scanner,
+            exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "uvm-\(UUID().uuidString)")!),
+            history: history, trash: MockTrash(outcome: .trashed), home: home)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.scanOrphans()
+        await scanner.gate.waitUntilStarted()
+        let task = vm.orphanTask
+        vm.cancelOrphanScan()
+        #expect(vm.orphanPhase == .idle)
+        #expect(vm.orphanProgress.completedLocations == 0)
+        await scanner.gate.release()           // 放行后 scan 会在取消之后回调 progress(5/8)
+        await task?.value
+        await Task.yield()
+        await Task.yield()
+        #expect(vm.orphanPhase == .idle)
+        #expect(vm.orphanProgress.completedLocations == 0)   // 5 未被写入
+    }
+
+    @Test func scanOrphansIsNoOpWhileScanning() async {
+        let orphan = leftover("Caches/com.gone.app", home: home)
+        let scanner = GatedOrphanScanner(result: .init(orphans: [orphan], failedLocationIDs: []))
+        let vm = UninstallViewModel(
+            discovery: FakeAppDiscovering(result: .init(apps: [], unreadableCount: 0)),
+            locator: FakeLeftoverLocating(map: [:]),
+            orphanScanner: scanner,
+            exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "uvm-\(UUID().uuidString)")!),
+            history: history, trash: MockTrash(outcome: .trashed), home: home)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.scanOrphans()
+        await scanner.gate.waitUntilStarted()
+        let task = vm.orphanTask
+        vm.scanOrphans()                       // .scanning:no-op
+        #expect(vm.orphanPhase == .scanning)
+        await scanner.gate.release()
+        await task?.value
+        #expect(scanner.scanCount == 1)
+        #expect(vm.orphans.map(\.path) == [orphan.path])
+        #expect(vm.orphanPhase == .results)
+    }
+
+    @Test func cleanOrphansIsGuardedWhileCleaning() async {
+        let a = leftover("Caches/com.a.app", home: home)
+        let trash = MockTrash(outcome: .trashed)
+        let vm = makeVM(orphans: .init(orphans: [a], failedLocationIDs: []), trash: trash)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.scanOrphans(); await vm.orphanTask?.value
+        vm.selectedOrphanPaths = [a.path]
+        vm.requestCleanOrphans(); vm.cleanOrphans()
+        #expect(vm.cleanState == .cleaning)
+        vm.confirmFlow = .orphans            // 程序化重入面
+        vm.cleanOrphans()                    // 必须被 cleanState 守卫挡住
+        await vm.cleanTask?.value
+        #expect(await trash.calls == [a.path])
+    }
+
+    // 对称收敛:未勾选的孤儿仍在磁盘,清理后必须留在剩余项里。
+    @Test func unselectedOrphanRemainsAfterClean() async {
+        let a = leftover("Caches/com.a.app", home: home, size: 10)
+        let b = leftover("Caches/com.b.app", home: home, size: 20)
+        let trash = MockTrash(outcome: .trashed)
+        let vm = makeVM(orphans: .init(orphans: [a, b], failedLocationIDs: []), trash: trash)
+        vm.startDiscovery(); await vm.discoveryTask?.value
+        vm.scanOrphans(); await vm.orphanTask?.value
+        vm.selectedOrphanPaths = [a.path]
+        vm.requestCleanOrphans(); vm.cleanOrphans(); await vm.cleanTask?.value
+        #expect(vm.orphans.map(\.path) == [b.path])
+        #expect(vm.selectedOrphanPaths.isEmpty)
+        #expect(vm.remainingCount == 1)
+        #expect(vm.remainingBytes == 20)
     }
 }
 
@@ -397,6 +497,7 @@ struct CancelFirstDiscovering: AppDiscovering {
 
 final class RecordingOrphanScanner: OrphanScanning, @unchecked Sendable {
     let result: OrphanScanResult
+    private(set) var scanCount = 0
     private(set) var recordedIDs: Set<String> = []
     private(set) var recordedNames: Set<String> = []
     private(set) var recordedExclusions: [String] = []
@@ -404,11 +505,59 @@ final class RecordingOrphanScanner: OrphanScanning, @unchecked Sendable {
     func scan(installedBundleIDs: Set<String>, installedAppNames: Set<String>,
               exclusions: [String],
               progress: @Sendable (OrphanScanProgress) -> Void) async -> OrphanScanResult {
+        scanCount += 1
         recordedIDs = installedBundleIDs
         recordedNames = installedAppNames
         recordedExclusions = exclusions
         progress(OrphanScanProgress(completedLocations: LeftoverLocations.all.count,
                                     totalLocations: LeftoverLocations.all.count))
+        return result
+    }
+}
+
+/// 让扫描器在 scan 内挂起,测试可精确控制「取消发生在进度回调之前」的时序。
+actor ScanGate {
+    private var isStarted = false
+    private var isReleased = false
+    private var resumeScans: [CheckedContinuation<Void, Never>] = []
+    private var startedWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func enter() async {
+        isStarted = true
+        let waiters = startedWaiters
+        startedWaiters = []
+        for waiter in waiters { waiter.resume() }
+        if isReleased { return }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            if isReleased { continuation.resume() } else { resumeScans.append(continuation) }
+        }
+    }
+
+    func waitUntilStarted() async {
+        if isStarted { return }
+        await withCheckedContinuation { continuation in
+            startedWaiters.append(continuation)
+        }
+    }
+
+    func release() {
+        isReleased = true
+        for continuation in resumeScans { continuation.resume() }
+        resumeScans = []
+    }
+}
+
+final class GatedOrphanScanner: OrphanScanning, @unchecked Sendable {
+    let result: OrphanScanResult
+    let gate = ScanGate()
+    private(set) var scanCount = 0
+    init(result: OrphanScanResult) { self.result = result }
+    func scan(installedBundleIDs: Set<String>, installedAppNames: Set<String>,
+              exclusions: [String],
+              progress: @Sendable (OrphanScanProgress) -> Void) async -> OrphanScanResult {
+        scanCount += 1
+        await gate.enter()
+        progress(OrphanScanProgress(completedLocations: 5, totalLocations: 8))
         return result
     }
 }
