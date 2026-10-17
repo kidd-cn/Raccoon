@@ -285,12 +285,18 @@ final class UninstallViewModelTests {
     // MARK: - 孤儿残留流
 
     @Test func orphanScanDefaultsToHighConfidenceRegenerable() async {
-        let highRegen = leftover("Caches/com.gone.app", home: home)
-        let highUser = leftover("Application Support/com.gone.app", home: home,
+        let highRegen = leftover("Caches/com.gone.app", home: home, size: 30)
+        let highUser = leftover("Application Support/com.gone.app", home: home, size: 20,
                                 safety: .userData, locationID: "app-support")
-        let low = leftover("Application Support/Old App", home: home, safety: .userData,
-                           ownership: .appName, locationID: "app-support-name")
-        let vm = makeVM(orphans: .init(orphans: [highRegen, highUser, low], failedLocationIDs: ["containers"]))
+        let low = leftover("Application Support/Old App", home: home, size: 10,
+                           safety: .userData, ownership: .appName, locationID: "app-support-name")
+        // 低置信 + 可再生:去掉 ownership == .bundleID 条件后会被误勾,钉住该负例。
+        let lowRegen = leftover("Caches/Old App", home: home, size: 5,
+                                safety: .regenerable, ownership: .appName,
+                                locationID: "app-support-name")
+        // 输入刻意按 size 升序:扫描结果必须按大小降序重排。
+        let vm = makeVM(orphans: .init(orphans: [lowRegen, low, highUser, highRegen],
+                                       failedLocationIDs: ["containers"]))
 
         vm.startDiscovery(); await vm.discoveryTask?.value
         vm.scanOrphans()
@@ -298,7 +304,8 @@ final class UninstallViewModelTests {
         await vm.orphanTask?.value
 
         #expect(vm.orphanPhase == .results)
-        #expect(vm.orphans.count == 3)
+        #expect(vm.orphans.count == 4)
+        #expect(vm.orphans.map(\.path) == [highRegen.path, highUser.path, low.path, lowRegen.path])
         #expect(vm.selectedOrphanPaths == [highRegen.path])
         #expect(vm.failedLocationIDs == ["containers"])
         #expect(vm.orphanProgress.totalLocations > 0)
