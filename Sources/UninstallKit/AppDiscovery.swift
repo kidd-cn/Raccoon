@@ -27,6 +27,8 @@ public struct AppDiscovery: AppDiscovering {
             let rootPath = root.resolvingSymlinksInPath().path
             // 根按解析后路径去重:~/Applications 链接到 /Applications 时不整套重复枚举。
             // 根本身可以是符号链接——枚举按字符串路径进行,会跟随末级链接。
+            // 已知限制:去重保留首个根的原始形态,排除项若写作另一别名根的路径(原始形态)
+            // 可能匹配不上;解析后形态的排除项仍生效。
             guard seenRoots.insert(rootPath).inserted else { continue }
             for candidate in Self.appCandidates(in: root, fm: fm) {
                 try Task.checkCancellation()

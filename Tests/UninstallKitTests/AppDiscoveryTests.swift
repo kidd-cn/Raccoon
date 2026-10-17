@@ -195,6 +195,37 @@ final class AppDiscoveryTests {
         #expect(result.apps.isEmpty)
     }
 
+    @Test func appliesRawPathExclusionToSymlinkedApp() async throws {
+        let root = try home.appRoot()
+        // 目标放在名为 .app 的普通容器目录里,不会被一层规则下钻枚举。
+        let target = try home.makeApp("Target", bundleID: "com.example.target",
+                                      inRoot: root.appendingPathComponent("Container.app"))
+        let link = root.appendingPathComponent("Excluded.app")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+        // 排除项写作链接路径(原始形态);解析路径是 Container.app/Target.app,不匹配。
+        let result = try await discover(roots: [root], exclusions: [link.path])
+        #expect(result.apps.isEmpty)
+    }
+
+    @Test func isUnderRejectsSiblingPrefix() {
+        #expect(!AppDiscovery.isUnder("/Applications2/Foo.app", rootPath: "/Applications"))
+        #expect(AppDiscovery.isUnder("/Applications/Foo.app", rootPath: "/Applications"))
+    }
+
+    @Test func dedupesAliasedRootsAndProgressCountsCandidates() async throws {
+        let root = try home.appRoot("Applications")
+        try home.makeApp("A", bundleID: "com.example.a", inRoot: root)
+        try home.makeApp("B", bundleID: "com.example.b", inRoot: root)
+        try home.makeApp("Safari", bundleID: "com.apple.Safari", inRoot: root)   // 被过滤项也应计数
+        let alias = home.url.appendingPathComponent("Alias")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: root)
+        final class Box: @unchecked Sendable { var last = 0 }
+        let box = Box()
+        _ = try await AppDiscovery(appRoots: [root, alias], running: Running())
+            .discover(exclusions: []) { box.last = $0.enumeratedCount }
+        #expect(box.last == 3)   // 去重后只枚举一次;未去重为 6;进度含被过滤的 Apple 应用
+    }
+
     @Test func throwsOnCancellation() async throws {
         let root = try home.appRoot()
         for index in 0..<20 {
