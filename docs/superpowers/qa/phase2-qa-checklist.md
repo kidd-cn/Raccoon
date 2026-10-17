@@ -1,0 +1,172 @@
+# Raccoon 二期 QA / 验收清单
+
+> **诚实性声明**:本文档生成于无 GUI 自动化环境(实现子代理)。本环境无法进行人工目测与 GUI 交互,故每项明确标注「✅ 自动核验」「⏳ 待人工」或「混合(自动半段 + 人工半段)」,**绝不将待人工项标成已验,也不把代码落位当成测试证据**。
+>
+> - **✅ 自动核验**:证据为真实存在的测试名与文件位置,或明确标注的代码锚点;不包含任何 GUI 目测结论。
+> - **⏳ 待人工**:需 GUI 交互或人眼判断,附操作步骤与预期。
+> - **混合**:自动半段与人工半段分列,自动半段不替人工半段背书。
+>
+> **实测基线(2026-10-17,分支 `feat/phase2`,HEAD `8cb571a`)**:
+> - `Scripts/test.sh` 全量 **175/175 绿**:UninstallKit **63** / ScanKit **40** / CleanKit **27** / AppCore **45**。
+> - 中英 L10n 各 **93** 键,键集 diff 为空(93:93 1:1)。
+> - 本文档所有「✅」均以该次实测为准;测试名已逐条 grep 确认存在,无编造。
+
+## 一、✅ 自动核验项(10 项)
+
+### A1. 应用发现:Apple 应用排除、一层子目录、同 ID 去重、符号链接越界跳过 — ✅
+
+- `findsTopLevelAndOneSubdirectoryLevel`(`Tests/UninstallKitTests/AppDiscoveryTests.swift:21`):应用根顶层与一层子目录被发现,更深层不进入结果。
+- `skipsAppleAppsAndMissingPlist`(同文件:36):`com.apple.*` 被排除;缺 `Info.plist` 的包计入不可读而非应用。
+- `dedupesSameBundleIDByRootOrder`(同文件:49):同一 Bundle ID 跨根只保留根顺序中的首个。
+- `skipsSymlinkEscapingRoot`(同文件:60):解析后逃出应用根的符号链接被跳过。
+- 补充:`followsSymlinkedRoot`(:100)、`skipsAppleBundleIDsCaseInsensitivelyAndCountsEmptyIDUnreadable`(:120)、`doesNotDescendIntoNestedAppBundles`(:140)、`ignoresPlainFileApp`(:111)。
+
+### A2. 关联数据分级与默认勾选:可再生勾、userData 不勾、未确认归属不勾 — ✅
+
+- `openDetailDefaultsToRegenerableExactOnly`(`Tests/AppCoreTests/UninstallViewModelTests.swift:53`):默认选择集仅含「精确归属(bundleID)+ 可再生」;userData 与名称匹配的低置信项均不勾。
+- `findsExactLocationsWithGrading`(`Tests/UninstallKitTests/LeftoverLocatorTests.swift:20`):各位置的归属精确度与安全分级正确。
+- `nameMatchIsLowConfidence`(同文件:55)、`groupContainerAcceptsTeamPrefixedName`(:49)、`dedupesSamePathByLocationIDOrder`(:63)。
+- 硬保护与用户排除不进定位结果:`excludesUserExclusionsAndHardProtectedPaths`(同文件:72)。
+
+### A3. 卸载提交 = 本体 + 已勾选;本体被跳过时应用留列表且报告可见 — ✅
+
+- `uninstallSubmitsBundleAndSelectedLeftovers`(`Tests/AppCoreTests/UninstallViewModelTests.swift:71`):`MockTrash` 收到的调用恰为 `[应用本体, 已勾选可再生数据]`,默认未勾的 userData 不提交;报告字节数 = 本体 + 已勾选;应用移出列表;`detailAppID == nil`;`lastUninstallBundleRemoved == true`;history 落一条。
+- `skippedBundleKeepsAppAndCleanedLeftoversConverge`(同文件:98):本体被 trash 跳过 → 应用仍在列表;报告 `skipped` 含本体路径;`detailAppID == nil`;`lastUninstallBundleRemoved == false`;已提交的关联数据仍正常收敛。
+- `uninstallClosesDetailImmediately`(:131):清理 Task 尚未完成时详情页已退栈(防旧详情盖住进度/报告)。
+- 剩余项收敛:`appRemovedKeepsUnselectedUserDataAsRemaining`(:189)、`appRemovedKeepsSkippedLeftover`(:209)。
+
+### A4. 孤儿扫描默认勾选 = 高置信 + 可再生;跳过项收敛留在结果里;未勾选项保留 — ✅
+
+- `orphanScanDefaultsToHighConfidenceRegenerable`(`Tests/AppCoreTests/UninstallViewModelTests.swift:308`):仅「精确归属 + 可再生」进入默认选择集;低置信即使可再生也不勾;结果按大小降序;`failedLocationIDs` 原样透出。
+- `cleanOrphansConvergesOnlyCleanedSubset`(同文件:335):提交两条、其中一条被跳过 → 跳过的仍留在结果与选择集,报告可见,`remainingCount == 1`。
+- `unselectedOrphanRemainsAfterClean`(:525):未勾选项清理后仍在结果中,`remainingBytes` 正确。
+- 扫描透传已安装集合:`orphanScanPassesInstalledSetsFromDiscovery`(:388);孤儿判定本身见 `Tests/UninstallKitTests/OrphanScannerTests.swift` 的 `highConfidenceOrphanWhenBundleIDNotInstalled`(:24)、`installedAppsAreNotOrphans`(:37)、`appleBundleIDsAreNeverOrphans`(:49)、`lowConfidenceForNonReverseDNSNames`(:65)、大小写折叠 `installedBundleIDMatchingIsCaseInsensitive`(:138) 等。
+
+### A5. 作用域白名单:越界路径不进提交(卸载流与孤儿流各一条)— ✅
+
+- 卸载流 VM 级:`scopeWhitelistDropsRoguePaths`(`Tests/AppCoreTests/UninstallViewModelTests.swift:149`)——手动塞入 `~/Library/Preferences/...` 后被剔除,提交仅为本体 + 合法项。
+- 卸载流安全锚点:`scopeWhitelistDropsRogueLocatorItems`(同文件:167)——上游定位器返回越界项且默认勾选会选中它们时,提交前仍被 scope 剔除(不依赖上游过滤的副作用)。
+- 孤儿流:`orphanCleanDropsRogueLocatorItems`(同文件:369)。
+- 基础不变量:`scopeOnlyAllowsDirectChildrenOfKnownFolders`(`Tests/UninstallKitTests/LeftoverLocatorTests.swift:137`);路径穿越 `rejectsBundleIDPathTraversalAcrossLocations`(:82)、`rejectsAppNamePathTraversalAcrossLocations`(:88);祖先符号链接越界 `skipsLocationWhoseResolvedDirEscapesLibrary`(:112,孤儿侧同文件 `Tests/UninstallKitTests/OrphanScannerTests.swift:105`);`~/Library` 自身为链接仍可定位 `libraryItselfBeingSymlinkStillLocates`(:123)。
+
+### A6. `~/Library/Preferences`、`~/Library/Cookies` 硬保护事实 — ✅
+
+- `preferencesAndCookiesAreHardProtected`(`Tests/UninstallKitTests/LeftoverLocationsTests.swift:64`):`ProtectionStore.isDenied` 对 Preferences/Cookies 下路径均为真,Caches 不受影响。
+- `excludedFoldersNeverEnterTableAndAreDenied`(同文件:52):位置表的排除目录与硬保护一致,Preferences/Cookies 不进入二期位置表。
+- `tableHasExpectedIDsAndGrading`(同文件:8):位置表 ID、归属与分级符合规格。
+
+### A7. history 保留最近 200 条 — ✅
+
+- `keepsOnlyLatest200Reports`(`Tests/CleanKitTests/HistoryStoreTests.swift:32`):追加 205 条后 `loadAll().count == 200`,最早 5 条被裁剪,首尾内容正确。
+- 辅证:`append_and_loadAll_roundtrip`、`append_preservesCorruptFileAside_andRecovers`(同文件)。
+
+### A8. 一期清理进度回投 — ✅(二期进度见「已知测试缺口」)
+
+- `cleanSelected_reportsProgress`(`Tests/AppCoreTests/ScanViewModelTests.swift:289`):清理开始时 `total == 2`、完成后 `done == 2`,`CleanProgress` 经回调回投 VM。
+- 二期卸载/孤儿清理进度已在代码落位(`UninstallViewModel.swift:190` 初始化、`:198` 逐项回投),但**无专测断言中间态**;不将代码落位冒充自动核验,详见文末缺口。
+
+### A9. 状态机守卫、取消复位与 stale 结果过滤 — ✅
+
+- 取消发现可复位重试:`cancelledDiscoveryResetsTaskAndAllowsRetry`(`Tests/AppCoreTests/UninstallViewModelTests.swift:226`)。
+- 重入/并发守卫:`uninstallIsGuardedWhileCleaning`(:279)、`cleanOrphansIsGuardedWhileCleaning`(:509)、`scanOrphansIsNoOpBeforeDiscoveryCompletes`(:408)、`scanOrphansIsNoOpWhileScanning`(:450)、`startDiscoveryIsIdempotentWithoutForce`(:254)、`cancelOrphanScanReturnsToIdle`(:358)。
+- stale 过滤:`staleProgressAfterCancelIsIgnored`(:427)、`staleTaskCleanupDoesNotClearNewerScanHandle`(:473);一期对称守卫 `cleanSelected_reentrancyGuarded`(`Tests/AppCoreTests/ScanViewModelTests.swift:110`)。
+- 生产装配不触真实 `/Applications`:`factoryWiresLocatorForTempHome`、`factoryWiresOrphanScanForTempHome`、`runningCheckerMatchesSystemQuery`(`Tests/AppCoreTests/UninstallServicesTests.swift:24,9,39`)。
+
+### A10. 发现/扫描进度与失败位置透出 — ✅
+
+- `recordsFailedLocationWhenEnumerationFails`(`Tests/UninstallKitTests/OrphanScannerTests.swift:188`):位置目录枚举失败被记录为 `failedLocationIDs`(值为位置 ID,UI 再映射为目录名),进度仍走完。
+- `missingLocationsAreNotFailuresAndProgressCompletes`(同文件:93):位置缺失不算失败,进度完成数为位置总数。
+- `reportsProgressWhileEnumerating`(`Tests/UninstallKitTests/AppDiscoveryTests.swift:81`)、`throwsOnCancellation`(:229)。
+
+## 二、⏳ 待人工项(8 项)
+
+### M1. 卸载一个真实测试应用:本体与勾选数据进废纸篓、可放回;userData 默认未勾 — ⏳ 待人工
+
+- 步骤:准备一个可弃用的测试应用(或复制一个自建 `.app` 到 `~/Applications`)→ 打开「卸载」模块 → 进入该应用详情 → 观察默认勾选 → 点「卸载…」→ 确认弹窗核对总项数与字节 → 点卸载。
+- 预期:应用本体固定参与提交;仅「精确归属 + 可再生」默认勾选;`Application Support` 等 userData 默认未勾;废纸篓中出现本体与已勾选数据;逐个「放回」后能恢复原路径;未勾选的 userData 原样留在磁盘。
+- 自动半段见 A2/A3,不能替代本项。
+
+### M2. 卸载后列表即时移除;本体/残留被跳过时留在列表并显示原因 — ⏳ 待人工
+
+- 步骤:完成一次成功卸载 → 观察返回列表后的应用集合;再对一个被占用/权限受限的测试应用执行卸载,或在 trash 阶段制造跳过。
+- 预期:成功时该应用立即从列表消失;本体被跳过时应用仍在列表;报告页「跳过」区显示路径与原因;残留被跳过时仍留在剩余项中。
+- 自动半段见 A3/A4。
+
+### M3. 残留扫描在真机发现真实无主残留,分组与失败位置展示正确 — ⏳ 待人工
+
+- 步骤:先正常卸载一个会留下 `~/Library/Caches` / `Application Support` 数据的测试应用(或手动制造一个反向域名的无主目录)→ 打开「卸载」→「孤儿残留」页 → 点扫描。
+- 预期:扫描完成后出现真实无主残留;「已确认归属(高置信)」与「未确认归属」分组正确;未确认项默认不勾选;若某已知位置不可枚举,底部以**目录名**显示失败位置;空库时显示空态。
+- 自动半段见 A4/A10。
+
+### M4. 应用运行中标识与确认弹窗警告 — ⏳ 待人工
+
+- 步骤:保持某个测试应用(或任意可运行应用)运行 → 进入卸载列表与详情 → 点卸载。
+- 预期:列表行与详情头部出现黄色「应用运行中」标识;确认弹窗出现黄色警告;不因运行中而绕过确认或默认勾选。
+- 自动半段:运行检查查询有测试(`runningCheckerMatchesSystemQuery`),但黄色标识与警告为视觉项。
+
+### M5. 中英切换、浅/深色下新页面无破版;空态/搜索/长路径截断 — ⏳ 待人工
+
+- 步骤:分别在中文/英文、浅色/深色下走「卸载列表 → 应用详情 → 孤儿残留 → 确认弹窗 → 报告页」;测试空搜索、无匹配搜索、超长路径行。
+- 预期:文案完整不截断、无重叠/溢出;长路径以中间截断显示;空态与搜索无结果提示可读;分组标题与标签对比度足够。
+- 自动半段:L10n 键集 93:93(见混合项 H1),不代表视觉无破版。
+
+### M6. `LeftoverRow` 点 Toggle 与点行空白处各只切换一次 — ⏳ 待人工
+
+- 步骤:在应用详情与孤儿结果中,分别「精确点击 Toggle」与「点击该行空白/文字区域」多次。
+- 预期:两种点击各只切换一次;不得出现点一次跳两次(双触发)。
+- 代码锚点:`AppDetailView.swift:109,129-130` 的 `Toggle` + 行级 `onTapGesture`;正确性依赖 SwiftUI 控件优先权,必须真机验证。
+
+### M7. 在应用详情页切到另一模块再切回,导航状态是否恢复 — ⏳ 待人工
+
+- 步骤:进入某应用详情 → 点侧边栏「清理」→ 再点回「卸载」。
+- 预期:导航状态有确定行为(回到列表或恢复详情均可接受,但需一致);若点击同一应用行无响应,按缺陷记录(可能残留 `detailAppID` 或导航栈异常)。
+
+### M8. 模块切换后已扫描的孤儿结果不被清空 — ⏳ 待人工
+
+- 步骤:扫描孤儿并得到结果 → 切到「清理」模块 → 再切回「卸载」并回到孤儿页。
+- 预期:结果、选择集与失败位置仍在,不要求重扫。
+- 代码锚点:孤儿状态由 `UninstallViewModel` 持有,模块切换不应重置;需真机确认视图重建不触发重扫。
+
+## 三、混合项(5 项,自动半段与人工半段分列)
+
+### H1. 中英双语与浅/深色适配 — 混合
+
+- ✅ 自动半段:zh-Hans 与 en 各 93 键,键集 diff 为空;全部二期新增文案经 `loc()` 消费;规则描述双语由既有测试保证。
+- ⏳ 人工半段:切换系统语言与外观,逐页检查新页面文案、换行与对比度;见 M5。
+
+### H2. 二期新页面布局与信息层级 — 混合
+
+- ✅ 自动半段:归属/分级数据与默认勾选由 A2/A4 测试钉住(UI 分组按这些字段过滤);报告页图标 `accessibilityHidden`、`reasonText` 对未知原因回退 `reason.other` 为代码锚点(`CleanReportView.swift:14-24`)。
+- ⏳ 人工半段:目测列表分组、标签颜色(橙/黄)、底部「已选 N 项 · X」是否含本体、报告页按钮主次关系;不得仅凭自动半段判为满足。
+
+### H3. 生产装配与真机发现范围 — 混合
+
+- ✅ 自动半段:`factoryWires*` 与 `runningCheckerMatchesSystemQuery` 证明装配与查询接线,且测试使用临时 home、不扫真实 `/Applications`。
+- ⏳ 人工半段:确认真实机器上发现的应用集合合理、Apple 应用不出现、不可读计数符合实际;属 M1 的前置观察。
+
+### H4. 确认弹窗快捷键:⏎ 触发取消、Esc 触发取消、破坏性按钮只能点按 — 混合
+
+- ✅ 自动半段(仅代码锚点):`UninstallConfirmView.swift:45` 取消按钮 `.defaultAction`、`:52` `.onExitCommand`;一期 `ConfirmCleanView.swift:37,42` 同步修复。Return 在实现期曾以事件探针验证,但仓库内无对应自动化测试。
+- ⏳ 人工半段:在卸载与孤儿确认弹窗中分别按 Return、Esc,并尝试键盘聚焦「卸载/清理」按钮回车。预期两键均只关闭弹窗、不执行删除;破坏性动作只能鼠标点按。Esc 必须真机确认。
+
+### H5. 报告页「返回列表」与「扫描残留…」路径 — 混合
+
+- ✅ 自动半段:路由与守卫有测试 `returnFromReportGoesBackToList`、`returnFromReportIsGuardedOutsideReport`(`Tests/AppCoreTests/UninstallViewModelTests.swift:118,247`);「扫描残留…」出现条件为代码锚点(`UninstallHomeView.swift` 的 `scanOrphansFromReportAction`:应用流 + 本体已删 + 仍有剩余)。
+- ⏳ 人工半段:部分卸载(保留未勾 userData)使 `remainingCount > 0` 且本体已删 → 报告页点「扫描残留…」;另一次清理点「返回列表」。预期:「扫描残留…」仅在该条件下出现,点击后回列表并切到孤儿页自动扫描;「返回列表」回应用列表,已清理项消失、未清理项保留。
+
+## 已知测试缺口(诚实记录)
+
+1. **二期清理进度中间态无专测**:`UninstallViewModel.swift:190,198` 已回投 `cleanProgress`,但无测试像一期 `cleanSelected_reportsProgress` 那样断言卸载/孤儿清理的逐项中间态。计划文档已列为可选强化(3 项 + 门控 trash,断言中途 `done == 1`)。
+2. **确认弹窗快捷键无仓库内自动化测试**:Return 的实现期事件探针结论不在版本库中;Esc 与「破坏性按钮仅点按」只能由 H4 真机确认。
+3. **`LeftoverRow` 双触发**:依赖 SwiftUI 控件优先权,无单测可覆盖,必须 M6 真机验证。
+4. **历史文件临时目录清理**:`HistoryStoreTests` 未显式清理临时目录,属测试卫生问题,不影响功能结论。
+
+## 统计
+
+按条目整体归属计(共 **23** 项):
+
+- **✅ 整体自动核验:10 项**(A1–A10)。其中 A8 仅覆盖一期进度;二期进度明确列为缺口,未标 ✅。
+- **⏳ 整体待人工:8 项**(M1–M8),每项均给出操作步骤与预期。
+- **混合:5 项**(H1–H5),自动半段与人工半段分列,自动半段不替人工背书。
+
+**结论**:工程侧自动可核验面全部为绿(175/175、L10n 93:93);二期功能与交互的人工验收尚未执行,本文档不宣称任何未真机验证项为「满足」。

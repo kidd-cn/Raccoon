@@ -3064,3 +3064,26 @@ Task 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 
 ```
 
 Task 13 与 8/9 互不冲突,可在 12 之后任意时点执行;Task 14 的用例数必须取自最终全量运行。
+
+## 执行记录(2026-10-17,feat/phase2)
+
+Task 1–13 已完成并通过逐任务规格审 + 质量审;Task 14 文档/QA 由本次提交补齐,Task 15 终审随后完成。当前全量 **175/175** 绿(UninstallKit 63 / ScanKit 40 / CleanKit 27 / AppCore 45),中英 L10n 各 93 键 1:1(键集 diff 为空)。
+
+### 实现期偏差与加固(均经双审确认)
+
+- Task 4:测试夹具按实际 API 调整;补齐原始形态排除、兄弟前缀、根去重/进度用例。
+- Task 5:`LeftoverLocator` 增加单一路径组件校验与精确父目录不变量(防 `../` 穿越伪造 safety);排除匹配同时检查原始与解析形态;`LeftoverScope.isLocationContained` 防祖先符号链接把枚举带出 `~/Library`。
+- Task 6:目录枚举改为 path 版 + `appendingPathComponent`;安装集合、resolver 查询与后缀匹配统一大小写折叠;Apple 前缀按 ID 与候选双形态检查。
+- Task 7:生产装配测试不扫真实 `/Applications`;补充 resolver/checker 用例。
+- Task 8:清理后收敛改为无条件差集(`gone = submitted − skipped`);取消发现复位 `hasDiscovered` 且可重试;`runClean` 重入守卫;清理开始即 `detailAppID = nil` 并快照应用本体传给 `applyCleanOutcome`,新增 `lastUninstallBundleRemoved`。
+- Task 9:`scanOrphans` 前置守卫 `phase == .list && cleanState == nil`;扫描代数令牌过滤 stale 进度/结果;`defer` 只清当前代数的任务句柄;`cancelOrphanScan`/`cleanOrphans` 守卫;scope 白名单与已安装集合透传均有安全锚点测试。
+- Task 10/11:`CleanReportView` 增加可选 `onScanOrphans`(仅 apps、本体已删且有剩余时出现);`reasonText` private、装饰图标 accessibilityHidden;残留页扫描按钮在发现完成前禁用并给出说明/重试;失败位置显示目录名;未确认提示条件改为存在即显示。
+- Task 11:确认弹窗取消键改为 `.defaultAction` + `.onExitCommand`(同按钮叠加双 `keyboardShortcut` 实测两键均失效);Task 13 同步修复一期 `ConfirmCleanView`。
+- Task 12/13:detail switch 改显式 case,新增模块由编译器强制接线;`JSONHistoryStore` 保留最近 200 条;一期清理进度经 `CleanExecutor` 回调回投(`ScanViewModel.swift` 的 `cleanProgress`)。
+
+### 顺延/可选
+
+- 真机 QA:见 `docs/superpowers/qa/phase2-qa-checklist.md`(自动 10 项、待人工 8 项、混合 5 项)。
+- 可选测试强化:一期清理进度中间态(3 项 + 门控 trash,断言中途 `done == 1`);二期清理进度中间态同法补齐;`HistoryStoreTests` 临时目录清理。
+- 已知缺口:二期清理进度无专测断言中间态;确认弹窗 Esc 快捷键与 `LeftoverRow` 双触发需真机验证,详见 QA 清单「已知测试缺口」。
+

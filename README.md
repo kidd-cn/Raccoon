@@ -1,6 +1,6 @@
 # Raccoon · 浣熊清理 🦝
 
-[![CI](https://github.com/kidd-cn/Raccoon/actions/workflows/ci.yml/badge.svg)](https://github.com/kidd-cn/Raccoon/actions/workflows/ci.yml)
+![CI](https://github.com/kidd-cn/Raccoon/actions/workflows/ci.yml/badge.svg)
 
 macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 预览勾选 → 确认后移入废纸篓。开源免费(MIT),吉祥物是浣熊,对标开源清理工具 Mole 的完整功能集,分六期实现。
 
@@ -8,7 +8,7 @@ macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 
 - **中英双语**:简体中文 / English,跟随系统语言
 - **核心价值主张:安全**。文件删除只进废纸篓;本地快照经系统 `tmutil` 回收(见谨慎项)、默认只勾选可再生内容、多层保护机制兜底
 
-## 当前功能(一期)
+## 当前功能(一期 + 二期)
 
 - **四类规则扫描**:系统垃圾 / 开发工具缓存 / 应用缓存 / 谨慎清理项,内置 27 条声明式规则(`rules.json`)
 - **实时扫描进度**:逐规则进度反馈,已发现条数与字节量实时跳动,可随时取消(取消即丢弃本轮结果)
@@ -17,19 +17,23 @@ macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 
 - **谨慎项处理**:iOS 设备备份、旧 macOS 安装器、本地 Time Machine 快照(`tmutil-thin`),一律默认不勾选、橙色标识、单独确认
 - **用户排除清单**:设置页管理,排除路径永不扫描、永不删除,持久化保存
 - **清理历史**:记录于 `~/Library/Application Support/Raccoon/history.json`,主页回显「上次清理释放 X」
+- **应用卸载**:应用本体与关联数据一起预览,默认只勾可再生数据;本体固定包含,运行中应用有黄色提示
+- **孤儿残留**:扫描已卸载应用留在 `~/Library` 已知位置的数据,按高置信/未确认归属分组;未确认项默认不勾选
 
 ## 安全设计:四道门
 
 删除类工具的第一要务是不删错东西。Raccoon 的四道安全门按纵深防御排列,前两道在引擎层,规则文件写错也拦得住:
 
-| 门 | 机制 | 说明 |
-| -- | ---- | ---- |
-| 1 | **内置硬保护** | 用户内容目录(`~/Desktop`、`~/Documents`、`~/Downloads` 等)与 `~/Library` 关键子目录(Mail、Keychains、Preferences 等)按路径组件级前缀匹配保护,命中即拒绝加载、拒绝展示、删除前再校验一次。**规则可以写错,引擎不许删错。** |
-| 2 | **用户排除清单** | 设置页添加的路径在扫描阶段即被过滤,结果中根本不出现 |
-| 3 | **安全分级** | `safe` 规则默认勾选;`cautious` 规则默认不勾选、橙色标识、确认弹窗单独分区;运行中应用的缓存项标黄「应用运行中」并默认不勾选 |
-| 4 | **只进废纸篓** | 文件删除动作唯一实现是 `FileManager.trashItem`,绝不 unlink、绝不抹除;唯一例外是本地快照清理(`tmutil-thin`),由系统 `tmutil deletelocalsnapshots` 执行、不可经废纸篓恢复——故列为 cautious 单独确认 |
+| 门 | 机制         | 说明                                                                                                                                                      |
+| - | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 | **内置硬保护**  | 用户内容目录(`~/Desktop`、`~/Documents`、`~/Downloads` 等)与 `~/Library` 关键子目录(Mail、Keychains、Preferences 等)按路径组件级前缀匹配保护,命中即拒绝加载、拒绝展示、删除前再校验一次。**规则可以写错,引擎不许删错。** |
+| 2 | **用户排除清单** | 设置页添加的路径在扫描阶段即被过滤,结果中根本不出现                                                                                                                              |
+| 3 | **安全分级**   | `safe` 规则默认勾选;`cautious` 规则默认不勾选、橙色标识、确认弹窗单独分区;运行中应用的缓存项标黄「应用运行中」并默认不勾选                                                                                 |
+| 4 | **只进废纸篓**  | 文件删除动作唯一实现是 `FileManager.trashItem`,绝不 unlink、绝不抹除;唯一例外是本地快照清理(`tmutil-thin`),由系统 `tmutil deletelocalsnapshots` 执行、不可经废纸篓恢复——故列为 cautious 单独确认          |
 
 配套保障:规则根作用域白名单(必须位于用户主目录内,唯一例外是 `/Applications` 下的 macOS 安装器)、符号链接解析前后双形态校验(别名指进保护根或逃出主目录均整条拒绝)、单条规则校验失败仅拒绝该条并记录,绝不静默放行。
+
+已知限制:`~/Library/Preferences` 与 `~/Library/Cookies` 因一期硬保护整棵覆盖,二期不列出;系统级 `/Library` 残留与任何提权操作留待三期。
 
 ## 构建与运行
 
@@ -37,7 +41,7 @@ macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 
 
 ```bash
 swift build            # 构建
-Scripts/test.sh        # 全量测试(81 用例)——唯一合法测试入口,勿直接 swift test
+Scripts/test.sh        # 全量测试(175 用例)——唯一合法测试入口,勿直接 swift test
 swift run              # 运行应用(开发模式)
 Scripts/bundle-app.sh  # 组装 Raccoon.app(adhoc 签名,输出到 build/)
 ```
@@ -71,16 +75,16 @@ CI:GitHub Actions(`macos-latest`)跑 `swift build` + `Scripts/test.sh` + L10n �
 }
 ```
 
-| 字段 | 必填 | 说明 |
-| ---- | ---- | ---- |
-| `id` | 是 | 全局唯一,重复即整条拒绝 |
-| `category` | 是 | `system` / `dev` / `apps` / `cautious` |
-| `safety` | 是 | `safe`(默认勾选)/ `cautious`(默认不勾选、单独确认) |
-| `action` | 否 | `trash`(默认)或 `tmutil-thin`(本地快照专用) |
-| `path` | 是 | 支持 `~` 展开;必须是具体目录,根不支持 glob |
-| `include` | 否 | 文件名 glob 白名单(如 `[".DS_Store"]`),空 = 目录全部内容 |
-| `exclude` | 否 | 相对 glob 排除 |
-| `description` | 否(推荐) | `zh-Hans` 与 `en` 双语说明,删了什么、有什么后果 |
+| 字段            | 必填    | 说明                                         |
+| ------------- | ----- | ------------------------------------------ |
+| `id`          | 是     | 全局唯一,重复即整条拒绝                               |
+| `category`    | 是     | `system` / `dev` / `apps` / `cautious`     |
+| `safety`      | 是     | `safe`(默认勾选)/ `cautious`(默认不勾选、单独确认)       |
+| `action`      | 否     | `trash`(默认)或 `tmutil-thin`(本地快照专用)         |
+| `path`        | 是     | 支持 `~` 展开;必须是具体目录,根不支持 glob                |
+| `include`     | 否     | 文件名 glob 白名单(如 `[".DS_Store"]`),空 = 目录全部内容 |
+| `exclude`     | 否     | 相对 glob 排除                                 |
+| `description` | 否(推荐) | `zh-Hans` 与 `en` 双语说明,删了什么、有什么后果           |
 
 内置规则由测试强制双语——`bundledRulesCoverAllCategoriesAndHaveLocalizedDescriptions` 要求每条含 `zh-Hans` 与 `en` description,PR 缺失会挂测试;提交前跑 `Scripts/test.sh` 确认。
 
@@ -99,14 +103,14 @@ CI:GitHub Actions(`macos-latest`)跑 `swift build` + `Scripts/test.sh` + L10n �
 
 ## 路线图
 
-| 阶段 | 内容 | 状态 |
-| ---- | ---- | ---- |
-| 一期 | 应用骨架 + 核心清理 | ✅ 完成 |
-| 二期 | 应用卸载 + 残留清理 | 规划 |
-| 三期 | AI 工具清理(Claude/Cursor/Ollama 等) | 规划 |
-| 四期 | 磁盘分析(treemap) | 规划 |
-| 五期 | 状态监控 + 系统优化 | 规划 |
-| 六期 | 菜单栏工具集 | 规划 |
+| 阶段 | 内容                              | 状态   |
+| -- | ------------------------------- | ---- |
+| 一期 | 应用骨架 + 核心清理                     | ✅ 完成 |
+| 二期 | 应用卸载 + 残留清理                     | ✅ 已实现(待人工 QA) |
+| 三期 | AI 工具清理(Claude/Cursor/Ollama 等) | 规划   |
+| 四期 | 磁盘分析(treemap)                   | 规划   |
+| 五期 | 状态监控 + 系统优化                     | 规划   |
+| 六期 | 菜单栏工具集                          | 规划   |
 
 后续每期独立走 spec → 计划 → 实现 流程;一期的架构(侧边栏骨架、规则库、ScanKit/CleanKit 拆分)为后续所有期次提供地基。
 
