@@ -17,6 +17,7 @@ public final class ScanViewModel {
     public private(set) var hits: [ScanHit] = []
     public private(set) var summaries: [CategorySummary] = []
     public private(set) var progress = ScanProgress(rulesDone: 0, rulesTotal: 0, hitsFound: 0, bytesFound: 0)
+    public private(set) var cleanProgress = CleanProgress(done: 0, total: 0)
     public private(set) var permissionSkippedCount = 0
     public private(set) var truncatedRuleIDs: Set<String> = []
     public private(set) var excludedCount = 0
@@ -113,6 +114,7 @@ public final class ScanViewModel {
         let items = selectedItems.map(\.cleanItem)
         guard !items.isEmpty else { return }
         phase = .cleaning
+        cleanProgress = CleanProgress(done: 0, total: items.count)
         confirmPresented = false
         // 明细页即刻让位(item 导航由绑定驱动,不复位则明细页一直留在栈上,清理完成后
         // 用户仍盯着旧列表——所见正是已进废纸篓的条目与旧字节数):用户报障「执行清理后
@@ -123,13 +125,18 @@ public final class ScanViewModel {
         let executor = CleanExecutor(trash: trash, protection: protection)
         cleanTask = Task { [weak self, history] in
             // Task 创建于 @MainActor 方法,闭包继承主 actor 隔离:此处的 phase/history 均在主线程触达
-            let report = await executor.clean(items)
+            guard let self else { return }
+            let report = await executor.clean(items) { [weak self] done, total in
+                Task { @MainActor [weak self] in
+                    self?.cleanProgress = CleanProgress(done: done, total: total)
+                }
+            }
             do { try history.append(report) }
             catch {
                 Logger(subsystem: "com.raccooncleaner.Raccoon", category: "history")
                     .error("history append failed: \(String(describing: error))")
             }
-            self?.applyCleanOutcome(report, submittedPaths: items.map(\.path))
+            self.applyCleanOutcome(report, submittedPaths: items.map(\.path))
         }
     }
 

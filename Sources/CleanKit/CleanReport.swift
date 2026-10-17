@@ -59,6 +59,8 @@ public struct JSONHistoryStore: HistoryStoring {
                 all = []
             }
             all.append(report)
+            // 二期起卸载/残留清理也写同一历史,写入频率上升;保留最近 200 条,防无限增长。
+            if all.count > 200 { all.removeFirst(all.count - 200) }
             let data = try JSONEncoder().encode(all)
             try data.write(to: url, options: .atomic)
         }

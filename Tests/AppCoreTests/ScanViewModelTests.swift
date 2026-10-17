@@ -284,6 +284,21 @@ final class ScanViewModelTests {
         vm.returnToResults()                // completed 态:明细页已是入口,无需也不应改动
         #expect(vm.phase == .completed)
     }
+
+    // polish:清理进度按 executor 回调回投(已处理/总数)
+    @Test func cleanSelected_reportsProgress() async {
+        let vm = makeVM(service: FakeScanService(result: .init(
+            hits: [hit("/a", 10), hit("/b", 20)],
+            summaries: [], permissionSkippedCount: 0, truncatedRuleIDs: [], excludedCount: 0)),
+            trash: MockTrash(outcome: .trashed))
+        vm.startScan()
+        await vm.task?.value
+        #expect(vm.cleanProgress == CleanProgress(done: 0, total: 0))
+        vm.cleanSelected()
+        #expect(vm.cleanProgress.total == 2)
+        await vm.cleanTask?.value
+        #expect(vm.cleanProgress == CleanProgress(done: 2, total: 2))
+    }
 }
 
 struct FailingScanService: ScanServicing {

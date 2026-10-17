@@ -77,7 +77,9 @@ struct RootView: View {
             switch selection {
             case .uninstall:
                 UninstallHomeView(vm: uvm)
-            default:
+            case .cleanup, .aiCleanup, .diskAnalysis, .monitor:
+                // 目前仅 cleanup 已实现;其余为侧边栏占位,后续接入时在此分流。
+                // 显式列全(不用 default):新增枚举 case 时由编译器强制更新。
                 CleanupHomeView(vm: vm)
                     .onAppear { vm.loadLastCleanup() }
             }

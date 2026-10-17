@@ -28,4 +28,18 @@ import Testing
         let backups = contents.filter { $0.lastPathComponent.hasPrefix("history-corrupted-") }
         #expect(backups.count == 1)
     }
+
+    @Test func keepsOnlyLatest200Reports() throws {
+        let dir = makeDir()
+        let store = JSONHistoryStore(directory: dir)
+        for i in 0..<205 {
+            try store.append(CleanReport(date: Date(timeIntervalSince1970: Double(i)),
+                                         freedBytes: Int64(i), trashedCount: 1,
+                                         vanishedCount: 0, skipped: []))
+        }
+        let all = try store.loadAll()
+        #expect(all.count == 200)
+        #expect(all.first?.freedBytes == 5)    // 最早的 5 条被裁剪
+        #expect(all.last?.freedBytes == 204)
+    }
 }

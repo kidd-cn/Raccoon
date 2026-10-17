@@ -13,8 +13,13 @@ struct CleanupHomeView: View {
                 case .scanning: scanningView
                 case .completed: completedView
                 case .cleaning:
-                    ProgressView(loc("common.clean"))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    VStack(spacing: 12) {
+                        ProgressView(value: Double(vm.cleanProgress.done),
+                                     total: Double(max(vm.cleanProgress.total, 1)))
+                            .frame(maxWidth: 320)
+                        Text(loc("common.clean")).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .report(let report): ReportView(report: report, vm: vm)
                 case .failed(let message): failedView(message)
                 }
