@@ -1,9 +1,9 @@
 import Foundation
 import AppKit
-import CleanKit
 import UninstallKit
 
-/// 运行中判定:NSRunningApplication 的类方法线程安全,无需主线程。
+/// 运行中判定:NSRunningApplication 标注 Sendable 且类方法可在任意线程调用
+/// (属性读取原子;列表可能受 run-loop 策略影响而短暂陈旧)。
 public struct NSRunningAppChecker: RunningAppChecking {
     public init() {}
     public func isRunning(bundleID: String) -> Bool {
