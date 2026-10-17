@@ -120,6 +120,20 @@ final class LeftoverLocatorTests {
         #expect(found.isEmpty)
     }
 
+    @Test func libraryItselfBeingSymlinkStillLocates() async throws {
+        // ~/Library 本身是链接(指向库内真实目录):resolvedLibrary 必须解析后再比较,
+        // 否则所有位置都被 isLocationContained 跳过,关联数据静默为空。
+        try home.makeDir("real-library/Caches/com.example.foo", bytes: 6)
+        try FileManager.default.createSymbolicLink(
+            at: home.url.appendingPathComponent("Library"),
+            withDestinationURL: home.url.appendingPathComponent("real-library"))
+        let found = await leftovers(app())
+        // 结果路径保持原始(未解析)形态——trash 的是该可删除路径;物理目标经链接可达。
+        let expected = home.url.appendingPathComponent("Library/Caches/com.example.foo").path
+        #expect(found.map(\.path) == [expected])
+        #expect(found.first?.locationID == "caches")
+    }
+
     @Test func scopeOnlyAllowsDirectChildrenOfKnownFolders() {
         let scope = LeftoverScope(home: home.url)
         let library = home.url.appendingPathComponent("Library").path
