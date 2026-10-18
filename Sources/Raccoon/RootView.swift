@@ -147,5 +147,13 @@ struct RootView: View {
                     .onAppear { vm.loadLastCleanup() }
             }
         }
+        // 离开监控页即关闭启动项子页:标记已升为应用级,不能靠 View 销毁归零。
+        // 放在 NavigationSplitView 外层,保证侧栏任意选择变化都会触发;
+        // 不放 MonitorHomeView.onDisappear——推入子页时它也会触发,会误清刚打开的标记。
+        .onChange(of: navigation.selection) { _, newValue in
+            if newValue != .monitor {
+                navigation.openLaunchItems = false
+            }
+        }
     }
 }
