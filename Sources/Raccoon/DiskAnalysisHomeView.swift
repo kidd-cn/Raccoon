@@ -5,7 +5,7 @@ import DiskKit
 import CleanKit
 
 /// 磁盘分析主页:由 vm.phase 驱动 idle/scanning/completed/cleaning/report/failed 六态。
-/// treemap 分段先占位,后续任务替换;列表态含面包屑下钻、勾选门禁与 others 聚合行。
+/// treemap 分段由 TreemapView 渲染(Canvas + 点击下钻);列表态含面包屑下钻、勾选门禁与 others 聚合行。
 private enum DiskViewMode: Hashable {
     case treemap
     case list
@@ -113,7 +113,11 @@ struct DiskAnalysisHomeView: View {
             if viewMode == .list {
                 listView
             } else {
-                treemapPlaceholder
+                TreemapView(rows: vm.displayRows) { node in
+                    vm.drill(into: node)
+                } onRescan: {
+                    vm.startScan()
+                }
             }
             Divider()
             bottomBar
@@ -172,15 +176,6 @@ struct DiskAnalysisHomeView: View {
                 Spacer()
             }
         }
-    }
-
-    private var treemapPlaceholder: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "square.grid.3x3")
-                .font(.system(size: 36)).foregroundStyle(.tertiary)
-            Text(loc("disk.view.treemap")).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var bottomBar: some View {
