@@ -57,8 +57,11 @@ struct MonitorHomeView: View {
             await probeSuggestionsFacts()
         }
         .onDisappear {
-            // NWPathMonitor.cancel() 不可复用;下次 .task 会重建(见 observer 实现)
+            // NWPathMonitor.cancel() 不可复用;下次 .task 会重建(见 observer 实现)。
+            // 轮询循环不是 .task 的子任务,必须显式停:VM 由 RootView 长期持有,
+            // 不停则离开本页后仍会 2s/30s 采样。数据保留,返回时 start() 自动重启。
             networkObserver.cancel()
+            vm.stop()
         }
         .onChange(of: scenePhase) { _, phase in
             vm.setActive(phase == .active)
@@ -111,6 +114,7 @@ struct MonitorHomeView: View {
             if let memory = vm.memory {
                 ProgressView(value: Double(memory.usedBytes),
                              total: Double(max(memory.totalBytes, 1)))
+                    .accessibilityLabel(loc("monitor.memory.used"))
                 metricRow(loc("monitor.memory.used"),
                           "\(byteText(memory.usedBytes)) / \(byteText(memory.totalBytes))")
                 metricRow(loc("monitor.memory.compressed"), byteText(memory.compressedBytes))

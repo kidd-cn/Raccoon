@@ -31,12 +31,14 @@ struct SparklineView: View {
     }
 
     /// 归一化到画布坐标:x 均匀铺满宽度,y 以 100% 为顶、0% 为底。
+    /// 单点无跨度,居中绘制(否则 x=0 会把圆点裁掉左半)。
     private func normalizedPoints(in size: CGSize) -> [CGPoint] {
         guard !values.isEmpty else { return [] }
-        let stepX = values.count > 1 ? size.width / CGFloat(values.count - 1) : size.width
+        let stepX = values.count > 1 ? size.width / CGFloat(values.count - 1) : 0
         return values.enumerated().map { index, raw in
             let clamped = min(max(raw, 0), 100)
-            return CGPoint(x: CGFloat(index) * stepX,
+            let x = values.count > 1 ? CGFloat(index) * stepX : size.width / 2
+            return CGPoint(x: x,
                            y: size.height - CGFloat(clamped / 100) * size.height)
         }
     }
