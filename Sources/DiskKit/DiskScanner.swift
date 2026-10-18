@@ -128,8 +128,10 @@ public struct DiskScanner: Sendable {
                 // 文件体量 = fileAllocSize(新 Foundation 名为 fileAllocatedSize);取不到回退 0 并照常计数
                 let size = Int64(values?.fileAllocatedSize ?? 0)
                 bytesScanned += size
+                // 契约第 6 条对叶子同样成立:文件节点 containsProtected = 自身 isDenied(文件可被精确排除)
                 stack[stack.count - 1].pending.append(
-                    DiskNode(path: path, name: name, sizeBytes: size, isDirectory: false))
+                    DiskNode(path: path, name: name, sizeBytes: size, isDirectory: false,
+                             containsProtected: protection.isDenied(path)))
                 entriesSinceProgress += 1
                 if entriesSinceProgress >= 64 { report(path) }
             }

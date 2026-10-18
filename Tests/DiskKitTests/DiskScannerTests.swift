@@ -191,6 +191,31 @@ private func makeScanner(hardRoots: [String] = [], userExclusions: [String] = []
         }
     }
 
+    @Test func protectedFileNodeIsMarkedDirectly() async throws {
+        let fx = try makeFixtureDir()
+        defer { try? FileManager.default.removeItem(at: fx) }
+        _ = try makeTree(fx, [
+            "plain.txt": Data(repeating: 0x01, count: 10),
+            "other.txt": Data(repeating: 0x02, count: 10),
+            "priv": ["inner.txt": Data(repeating: 0x03, count: 10)],
+        ])
+
+        let scanner = makeScanner(hardRoots: ["\(fx.path)/priv"],
+                                  userExclusions: ["\(fx.path)/plain.txt"])
+        let scanned = try await scanner.scan(root: fx.path)
+
+        let plain = try #require(scanned.children.first { $0.name == "plain.txt" })
+        let other = try #require(scanned.children.first { $0.name == "other.txt" })
+        let priv = try #require(scanned.children.first { $0.name == "priv" })
+        let inner = try #require(priv.children.first { $0.name == "inner.txt" })
+
+        // 文件叶子直评 isDenied:被精确排除的文件、硬保护目录内文件都要标上
+        #expect(plain.containsProtected, "userExclusion 精确命中的文件节点须标 containsProtected")
+        #expect(inner.containsProtected, "硬保护目录内文件节点须标 containsProtected")
+        #expect(!other.containsProtected, "无关文件不得误标")
+        #expect(priv.containsProtected)
+    }
+
     @Test func invalidRootThrows() async throws {
         // 相对路径:绝不按 CWD 相对解析,直接 throws
         await #expect(throws: (any Error).self) {
