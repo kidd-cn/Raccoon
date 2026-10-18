@@ -14,13 +14,12 @@ import LaunchKit
 struct MonitorHomeView: View {
     let vm: MonitorViewModel
     let launchItemsVM: LaunchItemsViewModel
+    let navigation: NavigationModel
     let onNavigate: (Module) -> Void
 
     private var _scenePhase: Environment<ScenePhase>
     private var _facts: State<ProbeFacts>
     private var _networkObserver: State<NetworkPathObserver>
-    // 启动项子页是 monitor 的栈内子导航(建议卡与工具区共用同一入口)。
-    private var _showLaunchItems: State<Bool>
 
     private var scenePhase: ScenePhase { _scenePhase.wrappedValue }
     private var facts: ProbeFacts {
@@ -28,20 +27,17 @@ struct MonitorHomeView: View {
         nonmutating set { _facts.wrappedValue = newValue }
     }
     private var networkObserver: NetworkPathObserver { _networkObserver.wrappedValue }
-    private var showLaunchItems: Bool {
-        get { _showLaunchItems.wrappedValue }
-        nonmutating set { _showLaunchItems.wrappedValue = newValue }
-    }
 
     init(vm: MonitorViewModel, launchItemsVM: LaunchItemsViewModel,
+         navigation: NavigationModel,
          onNavigate: @escaping (Module) -> Void) {
         self.vm = vm
         self.launchItemsVM = launchItemsVM
+        self.navigation = navigation
         self.onNavigate = onNavigate
         _scenePhase = Environment(\.scenePhase)
         _facts = State(wrappedValue: ProbeFacts())
         _networkObserver = State(wrappedValue: NetworkPathObserver())
-        _showLaunchItems = State(wrappedValue: false)
     }
 
     var body: some View {
@@ -56,8 +52,11 @@ struct MonitorHomeView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .navigationTitle(loc("monitor.title"))
-            .navigationDestination(isPresented: Binding(get: { showLaunchItems },
-                                                        set: { showLaunchItems = $0 })) {
+            // 启动项子页是 monitor 的栈内子导航(建议卡与工具区共用同一入口);
+            // 状态上提到 NavigationModel,菜单栏等外部入口也能直接打开。
+            .navigationDestination(isPresented: Binding(
+                get: { navigation.openLaunchItems },
+                set: { navigation.openLaunchItems = $0 })) {
                 LaunchItemsView(vm: launchItemsVM)
             }
         }
@@ -252,7 +251,7 @@ struct MonitorHomeView: View {
         case .cleanup:
             onNavigate(.cleanup)
         case .launchItems:
-            showLaunchItems = true
+            navigation.openLaunchItems = true
         }
     }
 
@@ -275,7 +274,7 @@ struct MonitorHomeView: View {
                 .accessibilityAddTraits(.isHeader)
             HStack(spacing: 12) {
                 toolButton(icon: "power", title: loc("monitor.tools.launchitems")) {
-                    showLaunchItems = true
+                    navigation.openLaunchItems = true
                 }
                 // 快照与系统垃圾都落在清理模块(同一页内的对应清理项)。
                 toolButton(icon: "clock.arrow.circlepath",

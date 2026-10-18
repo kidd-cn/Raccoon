@@ -11,14 +11,21 @@ struct RaccoonApp: App {
         get { _exclusions.wrappedValue }
         nonmutating set { _exclusions.wrappedValue = newValue }
     }
+    // 导航状态跨 scene(主窗口/菜单栏)共享,故由 App 持有唯一实例。
+    private var _navigation: State<NavigationModel>
+    var navigation: NavigationModel {
+        get { _navigation.wrappedValue }
+        nonmutating set { _navigation.wrappedValue = newValue }
+    }
 
     init() {
         _exclusions = State(wrappedValue: ExclusionsStore())
+        _navigation = State(wrappedValue: NavigationModel())
     }
 
     var body: some Scene {
         WindowGroup {
-            RootView(exclusions: exclusions)
+            RootView(exclusions: exclusions, navigation: navigation)
                 .frame(minWidth: 860, minHeight: 560)
                 // 27.0 SDK 无 Scene.windowTitle;用内容级 navigationTitle 承担窗口标题。
                 // 窗口标题兜底;RootView 侧栏 List 上的同调用服务列头,两处勿删其一

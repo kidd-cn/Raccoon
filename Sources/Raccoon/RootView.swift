@@ -23,6 +23,8 @@ enum Module: String, CaseIterable, Identifiable {
 
 struct RootView: View {
     let exclusions: ExclusionsStore
+    /// 引用类型、由 App 持有并注入:@Observable 自动追踪字段读取,无需再包 State。
+    let navigation: NavigationModel
     // 手写 @State 展开(本机 CLT 工具链缺 libSwiftUIMacros.dylib,见 RaccoonApp.swift 注释)。
     private var _vm: State<ScanViewModel>
     private var _uvm: State<UninstallViewModel>
@@ -30,7 +32,6 @@ struct RootView: View {
     private var _diskVM: State<DiskAnalysisViewModel>
     private var _monitorVM: State<MonitorViewModel>
     private var _launchItemsVM: State<LaunchItemsViewModel>
-    private var _selection: State<Module>
 
     var vm: ScanViewModel {
         get { _vm.wrappedValue }
@@ -45,8 +46,8 @@ struct RootView: View {
         nonmutating set { _uvm.wrappedValue = newValue }
     }
     var selection: Module {
-        get { _selection.wrappedValue }
-        nonmutating set { _selection.wrappedValue = newValue }
+        get { navigation.selection }
+        nonmutating set { navigation.selection = newValue }
     }
     var diskVM: DiskAnalysisViewModel {
         get { _diskVM.wrappedValue }
@@ -62,8 +63,9 @@ struct RootView: View {
     }
 
     @MainActor
-    init(exclusions: ExclusionsStore) {
+    init(exclusions: ExclusionsStore, navigation: NavigationModel) {
         self.exclusions = exclusions
+        self.navigation = navigation
         let history = JSONHistoryStore()
         let services = UninstallServices.make()
         // 主清理页过滤 = 全集去 .ai;AI 页 = [.ai](spec D3:两页互不见对方类别,互不共享状态)
@@ -98,12 +100,12 @@ struct RootView: View {
             store: launchStore,
             exclusions: exclusions,
             history: history))
-        _selection = State(wrappedValue: .cleanup)
     }
 
     var body: some View {
         NavigationSplitView {
-            List(selection: _selection.projectedValue) {
+            List(selection: Binding(get: { navigation.selection },
+                                    set: { navigation.selection = $0 })) {
                 Section {
                     ForEach(Module.availableCases) { module in
                         Label(loc("module.\(module.rawValue)"), systemImage: module.icon)
@@ -134,7 +136,9 @@ struct RootView: View {
                 DiskAnalysisHomeView(vm: diskVM)
             case .monitor:
                 // 跨模块跳转(建议卡/工具入口)通过回调改选中项,复用侧边栏导航
-                MonitorHomeView(vm: monitorVM, launchItemsVM: launchItemsVM) { module in
+                MonitorHomeView(vm: monitorVM,
+                                launchItemsVM: launchItemsVM,
+                                navigation: navigation) { module in
                     selection = module
                 }
             case .cleanup:
