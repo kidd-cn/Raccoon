@@ -49,13 +49,15 @@ private let diskFreeFractionThreshold: Double = 0.10
 private let diskFreeBytesThreshold: Int64 = 10_737_418_240
 
 /// 建议引擎真值表(纯函数)。稳定顺序:磁盘 → 快照 → 启动项 → 崩溃报告
-/// (spec §5.2 表),UI 按数组顺序渲染,与命中组合无关。磁盘条件为「或」且
-/// 两个阈值均严格小于;无命中返回空数组。
+/// (spec §5.2 表),UI 按数组顺序渲染,与命中组合无关。映射:磁盘空间紧张 →
+/// 磁盘分析(.diskAnalysis);快照占用/崩溃报告 → 清理(.cleanup);
+/// 开机自启项 → 启动项管理(.launchItems)。磁盘条件为「或」且两个阈值均
+/// 严格小于;无命中返回空数组。
 public func suggestions(for input: SuggestionsInput) -> [Suggestion] {
     var result: [Suggestion] = []
     if input.minVolumeFreeFraction < diskFreeFractionThreshold
         || input.minVolumeFreeBytes < diskFreeBytesThreshold {
-        result.append(Suggestion(id: "disk", destination: .cleanup))
+        result.append(Suggestion(id: "disk", destination: .diskAnalysis))
     }
     if input.hasSnapshots {
         result.append(Suggestion(id: "snapshots", destination: .cleanup))

@@ -24,12 +24,12 @@ import Testing
 
     @Test func lowFractionAloneTriggersDiskSuggestion() {
         let out = suggestions(for: healthy(fraction: 0.05))
-        #expect(out == [Suggestion(id: "disk", destination: .cleanup)])
+        #expect(out == [Suggestion(id: "disk", destination: .diskAnalysis)])
     }
 
     @Test func lowBytesAloneTriggersDiskSuggestion() {
         let out = suggestions(for: healthy(bytes: 5_000_000_000))
-        #expect(out == [Suggestion(id: "disk", destination: .cleanup)])
+        #expect(out == [Suggestion(id: "disk", destination: .diskAnalysis)])
     }
 
     @Test func fractionExactlyAtThresholdYieldsNoDiskSuggestion() {
@@ -67,7 +67,13 @@ import Testing
     @Test func allRulesHitKeepsStableOrder() {
         let out = suggestions(for: healthy(fraction: 0.03, bytes: 1_000_000_000,
                                           snapshots: true, agents: 7, crashes: 42))
-        #expect(out.map(\.id) == ["disk", "snapshots", "launchitems", "crashreports"])
+        // spec §5.2:disk→磁盘分析,snapshots/crashreports→清理,launchitems→启动项
+        #expect(out == [
+            Suggestion(id: "disk", destination: .diskAnalysis),
+            Suggestion(id: "snapshots", destination: .cleanup),
+            Suggestion(id: "launchitems", destination: .launchItems),
+            Suggestion(id: "crashreports", destination: .cleanup)
+        ])
     }
 
     @Test func nothingHitReturnsEmpty() {
