@@ -29,8 +29,12 @@ public final class LaunchItemsViewModel {
     public private(set) var systemItems: [LaunchItem] = []
     /// 最近一次成功移入废纸篓的报告;展示后由 dismissReport() 清空。
     public private(set) var lastReport: CleanReport?
-    /// 最近一次禁用失败原因(成功或未操作时为 nil),供页面给出最低限度反馈。
+    /// 最近一次禁用失败原因(稳定代码,如 "no-permission"/"not trashed")。
+    /// 视图侧负责映射为可读文案;成功、重新 load 或未操作时为 nil。
     public private(set) var lastError: String?
+    /// 是否有一次禁用编排在飞。Finder 降级(osascript)可能挂数秒,
+    /// 期间必须拒绝重入,否则报告/错误会互相覆盖。
+    public private(set) var isDisabling = false
 
     private let scanner: LaunchItemScanner
     private let store: LaunchItemStore
@@ -52,6 +56,7 @@ public final class LaunchItemsViewModel {
     }
 
     public func load() async {
+        lastError = nil
         reload()
     }
 
@@ -66,7 +71,12 @@ public final class LaunchItemsViewModel {
     /// 禁用一行:denied 快照直接 no-op;否则用实时保护层重建 store 再编排,
     /// 成功后记历史并重扫(条目消失),失败只记录原因、不伪造报告。
     public func disable(_ row: Row) async {
+        // 重入守卫放在最前:连点/并发第二次调用不得再触达假体或覆盖先到的结果。
+        guard !isDisabling else { return }
         guard !row.denied else { return }
+        isDisabling = true
+        lastError = nil
+        defer { isDisabling = false }
         let protection = effectiveProtection
         // load 之后新增的排除也必须拦住:重建后的 store 会在门禁处短路,零触达文件系统。
         guard !protection.isDenied(row.item.path) else {
@@ -85,6 +95,8 @@ public final class LaunchItemsViewModel {
             reload()
         case .failed(let reason):
             lastError = reason
+            // 失败可能是外部已把 plist 删走/移走:重扫避免留下幽灵行。
+            reload()
         }
     }
 

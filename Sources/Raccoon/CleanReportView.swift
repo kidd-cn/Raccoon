@@ -50,9 +50,12 @@ struct CleanReportView: View {
                 }
                 .frame(maxWidth: 420)
             }
-            // 部分清理后剩余项仍在结果里,必须说出来:否则用户只能靠「再扫一次」重新发现它们
+            // 部分清理后剩余项仍在结果里,必须说出来:否则用户只能靠「再扫一次」重新发现它们。
+            // 无字节口径的来源(如启动项禁用)只报数量,避免出现「0 字节未清理」的怪话。
             if remainingCount > 0 {
-                Text(loc("report.remaining", remainingCount, byteText(remainingBytes)))
+                Text(remainingBytes > 0
+                     ? loc("report.remaining", remainingCount, byteText(remainingBytes))
+                     : loc("report.remaining.count", remainingCount))
                     .monospacedDigit().foregroundStyle(.secondary)
             }
             HStack {

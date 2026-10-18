@@ -1,40 +1,64 @@
 import SwiftUI
 import AppCore
 import LaunchKit
+import CleanKit
 
 /// 启动项管理子页:用户级可禁用/排除,系统级只读。
 /// 删除只进废纸篓;禁用前一律经确认弹窗(默认键为取消),成功后展示报告并重扫列表。
+///
+/// 确认与报告共用一个 `.sheet(item:)` 状态机:禁用完成后从确认态原地切到报告态,
+/// 不会出现「一个 sheet 正在关闭、另一个 sheet 试图呈现」而被系统吞掉的竞态。
 ///
 /// 本机 CLT 工具链缺 SwiftUI 宏插件:`@State` 手写展开(见 RootView 注释)。
 struct LaunchItemsView: View {
     let vm: LaunchItemsViewModel
 
-    private var _pendingRow: State<LaunchItemsViewModel.Row?>
+    private enum Presentation: Identifiable {
+        case confirm(LaunchItemsViewModel.Row)
+        case report(CleanReport)
 
-    private var pendingRow: LaunchItemsViewModel.Row? {
-        get { _pendingRow.wrappedValue }
-        nonmutating set { _pendingRow.wrappedValue = newValue }
+        var id: String {
+            switch self {
+            case .confirm(let row):
+                "confirm-\(row.id)"
+            case .report(let report):
+                "report-\(report.date.timeIntervalSince1970)-\(report.trashedCount)"
+            }
+        }
+    }
+
+    private var _presentation: State<Presentation?>
+
+    private var presentation: Presentation? {
+        get { _presentation.wrappedValue }
+        nonmutating set { _presentation.wrappedValue = newValue }
     }
 
     init(vm: LaunchItemsViewModel) {
         self.vm = vm
-        _pendingRow = State(wrappedValue: nil)
+        _presentation = State(wrappedValue: nil)
     }
 
     var body: some View {
         listContent
             .navigationTitle(loc("launch.title"))
             .task { await vm.load() }
-            .sheet(isPresented: Binding(get: { vm.lastReport != nil },
-                                        set: { if !$0 { vm.dismissReport() } })) {
-                if let report = vm.lastReport {
+            .sheet(item: _presentation.projectedValue) { item in
+                switch item {
+                case .confirm(let row):
+                    LaunchConfirmView(
+                        row: row,
+                        isBusy: vm.isDisabling,
+                        onCancel: { presentation = nil },
+                        onConfirm: { confirm(row) })
+                case .report(let report):
                     CleanReportView(
                         report: report,
                         remainingCount: vm.userRows.count,
                         remainingBytes: 0,
-                        onBack: { vm.dismissReport() },
+                        onBack: { closeReport() },
                         onRescan: {
-                            vm.dismissReport()
+                            closeReport()
                             Task { await vm.load() }
                         },
                         sourceLabel: loc("report.source.launchItems"))
@@ -42,14 +66,39 @@ struct LaunchItemsView: View {
             }
     }
 
+    /// 确认后不先关 sheet:禁用期间确认卡片保持可见并显示进度/禁用按钮;
+    /// 完成后同一 sheet 切换到报告态(失败则关闭,页面显示可读原因)。
+    private func confirm(_ row: LaunchItemsViewModel.Row) {
+        Task {
+            await vm.disable(row)
+            if let report = vm.lastReport {
+                presentation = .report(report)
+            } else {
+                presentation = nil
+            }
+        }
+    }
+
+    private func closeReport() {
+        presentation = nil
+        vm.dismissReport()
+    }
+
     private var listContent: some View {
         List {
-            Section(loc("launch.user")) {
+            Section {
                 if vm.userRows.isEmpty {
                     Text(loc("launch.empty")).foregroundStyle(.secondary)
                 } else {
                     ForEach(vm.userRows) { row in
                         userRow(row)
+                    }
+                }
+            } header: {
+                HStack(spacing: 8) {
+                    Text(loc("launch.user"))
+                    if vm.isDisabling {
+                        ProgressView().controlSize(.mini)
                     }
                 }
             }
@@ -68,20 +117,12 @@ struct LaunchItemsView: View {
             }
             if let error = vm.lastError {
                 Section {
-                    Text(error).font(.caption).foregroundStyle(.secondary)
+                    Text(loc("launch.failed", reasonText(error)))
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
         .listStyle(.inset)
-        .sheet(item: _pendingRow.projectedValue) { row in
-            LaunchConfirmView(
-                row: row,
-                onCancel: { pendingRow = nil },
-                onConfirm: {
-                    pendingRow = nil
-                    Task { await vm.disable(row) }
-                })
-        }
     }
 
     private func userRow(_ row: LaunchItemsViewModel.Row) -> some View {
@@ -104,13 +145,16 @@ struct LaunchItemsView: View {
                 }
             }
             Spacer(minLength: 8)
-            if row.denied {
+            // 排除入口只对「尚未受保护」的行开放:排除后该行变灰、按钮消失即是反馈;
+            // 已 denied 的行再排除不会有任何可见变化,故不显示。
+            if !row.denied {
                 Button(loc("launch.exclude")) { vm.exclude(row) }
                     .controlSize(.small)
+                    .disabled(vm.isDisabling)
             }
-            Button(loc("launch.disable")) { pendingRow = row }
+            Button(loc("launch.disable")) { presentation = .confirm(row) }
                 .controlSize(.small)
-                .disabled(row.denied)
+                .disabled(row.denied || vm.isDisabling)
         }
         .padding(.vertical, 2)
     }
@@ -135,5 +179,12 @@ struct LaunchItemsView: View {
         Text(text)
             .font(.caption2)
             .foregroundStyle(.secondary)
+    }
+
+    /// 内部稳定代码 → 可读文案(与 CleanReportView 同口径,未知代码落到「其他原因」)。
+    private func reasonText(_ code: String) -> String {
+        let key = "reason.\(code)"
+        let value = loc(key)
+        return value == key ? loc("reason.other") : value
     }
 }

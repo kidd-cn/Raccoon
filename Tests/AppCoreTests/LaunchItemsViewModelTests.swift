@@ -21,6 +21,27 @@ private actor MovingTrash: TrashServicing {
     }
 }
 
+/// 可控闸门 trash:第一次触达后挂起,直到测试显式 open——用于验证 in-flight 重入守卫。
+private actor GatedLaunchTrash: TrashServicing {
+    private(set) var calls: [String] = []
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var isOpen = false
+
+    func open() {
+        isOpen = true
+        for waiter in waiters { waiter.resume() }
+        waiters.removeAll()
+    }
+
+    func trash(_ path: String) async -> TrashOutcome {
+        calls.append(path)
+        if !isOpen {
+            await withCheckedContinuation { waiters.append($0) }
+        }
+        return .trashed
+    }
+}
+
 @Suite @MainActor
 final class LaunchItemsViewModelTests {
     let root: URL
@@ -141,6 +162,32 @@ final class LaunchItemsViewModelTests {
 
         #expect(vm.userRows.first?.denied == true)
         #expect(exclusions.exclusions == [path])
+    }
+
+    /// in-flight 守卫:第一次禁用挂在假体上时,第二次调用必须直接返回、不再触达假体。
+    @Test func reentrantDisableIsIgnoredWhileOneInFlight() async throws {
+        try writePlist(into: userDir, name: "com.test.gated.plist", label: "com.test.gated")
+        let trash = GatedLaunchTrash()
+        let vm = makeVM(trash: trash)
+        await vm.load()
+        let row = try #require(vm.userRows.first)
+
+        let first = Task { await vm.disable(row) }
+        // 等第一次调用进入假体(此后它会挂在闸门上)
+        while await trash.calls.isEmpty {
+            await Task.yield()
+        }
+        #expect(vm.isDisabling)
+
+        await vm.disable(row)          // 重入:必须 no-op
+        let during = await trash.calls
+        #expect(during.count == 1)
+
+        await trash.open()
+        await first.value
+        let after = await trash.calls
+        #expect(after.count == 1)
+        #expect(!vm.isDisabling)
     }
 
     /// 实时排除:init 之后新增的排除必须对后续 load 与 disable 门禁同时生效

@@ -163,3 +163,5 @@
 "launch.exclude" = "Exclude";
 "launch.empty" = "No login items found";
 "report.source.launchItems" = "Login Items";
+"report.remaining.count" = "%d items not cleaned";
+"launch.failed" = "Could not disable: %@";

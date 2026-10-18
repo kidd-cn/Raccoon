@@ -163,3 +163,5 @@
 "launch.exclude" = "排除";
 "launch.empty" = "未发现启动项";
 "report.source.launchItems" = "启动项管理";
+"report.remaining.count" = "还有 %d 项未清理";
+"launch.failed" = "禁用失败：%@";
