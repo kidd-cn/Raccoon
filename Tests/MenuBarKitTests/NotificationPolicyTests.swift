@@ -93,6 +93,18 @@ import MenuBarKit
         #expect(evaluate(snapshot) == [.lowDisk])
     }
 
+    @Test func diskNegativeAvailableTriggers() {
+        // 负可用值多来自采集异常,语义上仍代表空间极度不足,应告警。
+        let snapshot = disk(volume(total: 100 * gib, available: -1))
+        #expect(evaluate(snapshot) == [.lowDisk])
+    }
+
+    @Test func diskZeroTotalUsesBytesOnly() {
+        // 容量未知(0)不得按 0% 比例判空盘;可用字节充足时不触发。
+        let snapshot = disk(volume(total: 0, available: 500 * gib))
+        #expect(evaluate(snapshot).isEmpty)
+    }
+
     // MARK: - 内存阈值边界
 
     @Test func memoryAtThresholdTriggers() {
@@ -136,6 +148,13 @@ import MenuBarKit
     @Test func missingLastNotifiedEntryIsTreatedAsNeverNotified() {
         let snapshot = MenuBarSnapshot(memory: memory(total: 100 * gib, used: 90 * gib))
         #expect(evaluate(snapshot, lastNotified: [:]) == [.highMemory])
+    }
+
+    @Test func clockRollbackKeepsCooldownActive() {
+        // 系统时钟回拨使间隔为负,仍小于冷却时长,应视为冷却中。
+        let snapshot = MenuBarSnapshot(memory: memory(total: 100 * gib, used: 90 * gib))
+        let last = [NotificationKind.highMemory: now.addingTimeInterval(60)]
+        #expect(evaluate(snapshot, lastNotified: last).isEmpty)
     }
 
     // MARK: - 组合与顺序

@@ -34,9 +34,11 @@ public enum NotificationPolicy {
 
     private static func isLowDisk(_ snapshot: MenuBarSnapshot) -> Bool {
         guard let volume = snapshot.diskVolume else { return false }
-        let fraction = volume.totalBytes > 0
-            ? Double(volume.availableBytes) / Double(volume.totalBytes)
-            : 0
+        // 容量未知时比例无意义:按 0% 处理会把「未知」误报成「空盘」,只信字节维度。
+        guard volume.totalBytes > 0 else {
+            return volume.availableBytes < lowDiskBytes
+        }
+        let fraction = Double(volume.availableBytes) / Double(volume.totalBytes)
         return fraction < lowDiskFraction || volume.availableBytes < lowDiskBytes
     }
 
