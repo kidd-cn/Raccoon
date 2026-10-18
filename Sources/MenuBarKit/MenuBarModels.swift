@@ -17,6 +17,7 @@ public struct MenuBarSnapshot: Equatable, Sendable {
     public let volumes: [VolumeInfo]
     public let memory: MemoryStats?
     public let cpu: CPULoad?
+    /// 电池仅供菜单栏面板消费,formatter 不读取——不是死代码。
     public let battery: BatteryInfo?
     public let network: NetworkStatus?
 
@@ -51,6 +52,7 @@ public extension MenuBarSnapshot {
     private static func availableRatio(_ volume: VolumeInfo) -> Double {
         guard volume.totalBytes > 0 else { return .greatestFiniteMagnitude }
         let ratio = Double(volume.availableBytes) / Double(volume.totalBytes)
+        // 防御性:Int64 入参的除法不可能得到非有限值,正常输入不可达。
         return ratio.isFinite ? ratio : .greatestFiniteMagnitude
     }
 }
@@ -61,6 +63,7 @@ public enum MenuBarLabel: Equatable, Sendable {
     case percent(Int)
     /// 网络状态原样透传(nil 表示尚未采集到)
     case network(NetworkStatus?)
-    /// 不显示数值(仅图标)
+    /// 不显示数值。同时表示 iconOnly 与「无数据」两种情形:
+    /// 视图须结合 style 区分渲染——无数据时显示本地化的「—」而非空白。
     case none
 }

@@ -36,9 +36,33 @@ import MenuBarKit
     // MARK: - 磁盘
 
     @Test func diskPercentRounds() {
-        let snapshot = MenuBarSnapshot(volumes: [volume(total: 500, available: 200)])
+        // 100/300 = 33.33…% → 33,验证的是四舍五入而非截断。
+        let snapshot = MenuBarSnapshot(volumes: [volume(total: 300, available: 100)])
         let label = MenuBarLabelFormatter.label(metric: .disk, style: .iconAndValue, snapshot: snapshot)
-        #expect(label == .percent(40))
+        #expect(label == .percent(33))
+    }
+
+    @Test func diskPercentRoundsHalfUp() {
+        // 125/200 = 62.5% → 63(.5 进位)。
+        let snapshot = MenuBarSnapshot(volumes: [volume(total: 200, available: 125)])
+        let label = MenuBarLabelFormatter.label(metric: .disk, style: .iconAndValue, snapshot: snapshot)
+        #expect(label == .percent(63))
+    }
+
+    @Test func diskSkipsZeroTotalVolumeWhenChoosing() {
+        // 零容量卷排在最前也不得被选中,选卷应落到正常卷上。
+        let zero = volume(name: "Zero", total: 0, available: 0)
+        let normal = volume(name: "Normal", total: 100, available: 60)
+        let snapshot = MenuBarSnapshot(volumes: [zero, normal])
+        #expect(snapshot.diskVolume == normal)
+        let label = MenuBarLabelFormatter.label(metric: .disk, style: .iconAndValue, snapshot: snapshot)
+        #expect(label == .percent(60))
+    }
+
+    @Test func diskNegativeAvailableClampsToZero() {
+        let snapshot = MenuBarSnapshot(volumes: [volume(total: 100, available: -20)])
+        let label = MenuBarLabelFormatter.label(metric: .disk, style: .iconAndValue, snapshot: snapshot)
+        #expect(label == .percent(0))
     }
 
     @Test func diskPrefersSystemDiskEvenWhenExternalHasLowerRatio() {
@@ -110,6 +134,14 @@ import MenuBarKit
             metric: .cpu, style: .iconAndValue, snapshot: MenuBarSnapshot()
         )
         #expect(label == .none)
+    }
+
+    @Test func cpuNonFiniteIsNone() {
+        let nan = MenuBarSnapshot(cpu: CPULoad(userPct: .nan, systemPct: 5, idlePct: 0))
+        #expect(MenuBarLabelFormatter.label(metric: .cpu, style: .iconAndValue, snapshot: nan) == .none)
+
+        let infinite = MenuBarSnapshot(cpu: CPULoad(userPct: .infinity, systemPct: 5, idlePct: 0))
+        #expect(MenuBarLabelFormatter.label(metric: .cpu, style: .iconAndValue, snapshot: infinite) == .none)
     }
 
     // MARK: - 网络
