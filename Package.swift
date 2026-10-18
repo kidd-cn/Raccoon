@@ -25,12 +25,16 @@ let package = Package(
         ),
         .target(name: "MonitorKit"),
         .target(
+            name: "LaunchKit",
+            dependencies: ["CleanKit"]
+        ),
+        .target(
             name: "AppCore",
-            dependencies: ["ScanKit", "CleanKit", "UninstallKit", "DiskKit", "MonitorKit"]
+            dependencies: ["ScanKit", "CleanKit", "UninstallKit", "DiskKit", "MonitorKit", "LaunchKit"]
         ),
         .executableTarget(
             name: "Raccoon",
-            dependencies: ["AppCore", "ScanKit", "CleanKit", "UninstallKit", "DiskKit", "MonitorKit"],
+            dependencies: ["AppCore", "ScanKit", "CleanKit", "UninstallKit", "DiskKit", "MonitorKit", "LaunchKit"],
             resources: [.process("Resources")]
         ),
         .testTarget(name: "CleanKitTests", dependencies: ["CleanKit"]),
@@ -38,6 +42,7 @@ let package = Package(
         .testTarget(name: "UninstallKitTests", dependencies: ["UninstallKit", "CleanKit"]),
         .testTarget(name: "DiskKitTests", dependencies: ["DiskKit", "CleanKit"]),
         .testTarget(name: "MonitorKitTests", dependencies: ["MonitorKit"]),
+        .testTarget(name: "LaunchKitTests", dependencies: ["LaunchKit"]),
         .testTarget(name: "AppCoreTests", dependencies: ["AppCore", "ScanKit", "CleanKit", "UninstallKit"]),
     ]
 )
