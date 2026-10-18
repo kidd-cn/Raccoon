@@ -66,6 +66,11 @@ import CoreGraphics
         for r in z {
             #expect(abs(Double(r.rect.width * r.rect.height) - quarter) < 1e-6)
         }
+
+        // 并列权重按原下标序(降序权重,并列取较小下标在前)
+        let tiedWeights: [Int64] = [3, 81, 3, 27, 9, 9, 27]
+        let tied = SquarifiedTreemap.layout(in: area, weights: tiedWeights)
+        #expect(tied.map(\.index) == [1, 3, 6, 4, 5, 0, 2])
     }
 
     @Test func hitTestFindsContainingRectAndMisses() {
