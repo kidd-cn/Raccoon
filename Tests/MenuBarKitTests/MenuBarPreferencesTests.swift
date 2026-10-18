@@ -2,25 +2,28 @@ import Foundation
 import Testing
 import MenuBarKit
 
-// 串行执行:所有用例共享同一 UserDefaults 域,并行时彼此的清域会互相踩踏。
-@Suite(.serialized) struct MenuBarPreferencesTests {
+// 每实例唯一域:多 worktree/多会话会并发跑测试,固定域名 + removePersistentDomain
+// 会跨进程互踩(同 AppCoreTests 的既有做法)。
+@Suite final class MenuBarPreferencesTests {
+    private let suiteName: String
+    private let defaults: UserDefaults
 
-    private static let suiteName = "com.raccooncleaner.Raccoon.tests.menubarprefs"
-
-    /// 每个用例独占干净 suite:UserDefaults 按域缓存,不清域会跨用例串扰。
-    private func makeDefaults() -> UserDefaults {
-        let defaults = UserDefaults(suiteName: Self.suiteName)!
-        defaults.removePersistentDomain(forName: Self.suiteName)
-        return defaults
+    init() {
+        suiteName = "menubarprefs-\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: suiteName)!
     }
 
-    private func cleanup(_ defaults: UserDefaults) {
-        defaults.removePersistentDomain(forName: Self.suiteName)
+    deinit {
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    private func store() -> UserDefaultsPreferenceStore {
+        UserDefaultsPreferenceStore(defaults: defaults)
     }
 
     // MARK: - 默认值
 
-    @Test func defaults() {
+    @Test func defaultValues() {
         let prefs = MenuBarPreferences()
         #expect(prefs.metric == .disk)
         #expect(prefs.iconStyle == .iconAndValue)
@@ -46,9 +49,7 @@ import MenuBarKit
     // MARK: - 持久化往返
 
     @Test func storeRoundTripPreservesAllFields() {
-        let defaults = makeDefaults()
-        defer { cleanup(defaults) }
-        let store = UserDefaultsPreferenceStore(defaults: defaults)
+        let store = store()
         let prefs = MenuBarPreferences(
             metric: .memory,
             iconStyle: .iconOnly,
@@ -62,29 +63,22 @@ import MenuBarKit
     }
 
     @Test func storeLoadsDefaultsWhenSuiteIsEmpty() {
-        let defaults = makeDefaults()
-        defer { cleanup(defaults) }
-        let store = UserDefaultsPreferenceStore(defaults: defaults)
-        #expect(store.load() == MenuBarPreferences())
+        #expect(store().load() == MenuBarPreferences())
     }
 
     // MARK: - 非法/越界外部写入
 
     @Test func unknownRawValuesFallBackToDefaults() {
-        let defaults = makeDefaults()
-        defer { cleanup(defaults) }
         defaults.set("bogus", forKey: "menubar.metric")
         defaults.set("bogus", forKey: "menubar.iconStyle")
 
-        let prefs = UserDefaultsPreferenceStore(defaults: defaults).load()
+        let prefs = store().load()
         #expect(prefs.metric == .disk)
         #expect(prefs.iconStyle == .iconAndValue)
     }
 
     @Test func outOfRangeStoredThresholdIsClampedOnLoad() {
-        let defaults = makeDefaults()
-        defer { cleanup(defaults) }
-        let store = UserDefaultsPreferenceStore(defaults: defaults)
+        let store = store()
 
         defaults.set(1.5, forKey: "menubar.memoryThreshold")
         #expect(store.load().memoryThreshold == 0.95)
@@ -93,12 +87,30 @@ import MenuBarKit
         #expect(store.load().memoryThreshold == 0.70)
     }
 
+    @Test func nonFiniteThresholdFallsBackToDefault() {
+        // NaN 不参与 min/max 夹取,必须显式回退,否则下游比较永久静默。
+        #expect(MenuBarPreferences(memoryThreshold: .nan).memoryThreshold == 0.85)
+
+        defaults.set(Double.nan, forKey: "menubar.memoryThreshold")
+        #expect(store().load().memoryThreshold == 0.85)
+    }
+
+    @Test func nonNumericStoredValuesFallBackToDefaults() {
+        // 外部写入类型不符时 as? 转换失败,不得崩溃或把阈值误读为 0。
+        defaults.set("high", forKey: "menubar.memoryThreshold")
+        defaults.set("true", forKey: "menubar.launchAtLogin")
+        defaults.set("true", forKey: "menubar.notificationsEnabled")
+
+        let prefs = store().load()
+        #expect(prefs.memoryThreshold == 0.85)
+        #expect(prefs.launchAtLogin == false)
+        #expect(prefs.notificationsEnabled == false)
+    }
+
     // MARK: - 通知时间戳
 
     @Test func lastNotifiedRoundTripKeepsSeconds() {
-        let defaults = makeDefaults()
-        defer { cleanup(defaults) }
-        let store = UserDefaultsPreferenceStore(defaults: defaults)
+        let store = store()
         let diskDate = Date(timeIntervalSince1970: 1_700_000_123)
         let memoryDate = Date(timeIntervalSince1970: 1_700_000_456)
 
@@ -110,9 +122,7 @@ import MenuBarKit
     }
 
     @Test func lastNotifiedKindsAreIndependent() {
-        let defaults = makeDefaults()
-        defer { cleanup(defaults) }
-        let store = UserDefaultsPreferenceStore(defaults: defaults)
+        let store = store()
         let date = Date(timeIntervalSince1970: 1_700_000_789)
 
         store.saveLastNotified([.highMemory: date])
@@ -122,10 +132,7 @@ import MenuBarKit
     }
 
     @Test func lastNotifiedMissingKeysYieldEmptyDictionary() {
-        let defaults = makeDefaults()
-        defer { cleanup(defaults) }
-        let store = UserDefaultsPreferenceStore(defaults: defaults)
-        #expect(store.loadLastNotified().isEmpty)
+        #expect(store().loadLastNotified().isEmpty)
     }
 
     @Test func notificationKindRawValuesAreStable() {

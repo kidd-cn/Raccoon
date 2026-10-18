@@ -27,6 +27,11 @@ public struct MenuBarPreferences: Equatable, Sendable {
         self.iconStyle = iconStyle
         self.launchAtLogin = launchAtLogin
         self.notificationsEnabled = notificationsEnabled
+        // NaN 参与 min/max 仍是 NaN;若不拦,Task 3 的 >= 判定会永久不触发且无从察觉。
+        guard memoryThreshold.isFinite else {
+            self.memoryThreshold = 0.85
+            return
+        }
         self.memoryThreshold = min(
             max(memoryThreshold, Self.memoryThresholdRange.lowerBound),
             Self.memoryThresholdRange.upperBound
@@ -39,6 +44,7 @@ public protocol MenuBarPreferenceStore: Sendable {
     func load() -> MenuBarPreferences
     func save(_ p: MenuBarPreferences)
     func loadLastNotified() -> [NotificationKind: Date]
+    /// 按 kind 合并写入:未出现在 map 中的 kind 保留既有时间戳,不是整体替换。
     func saveLastNotified(_ m: [NotificationKind: Date])
 }
 
