@@ -5,7 +5,7 @@
 > - **✅ 自动核验**:证据为真实运行的命令输出、测试名与文件位置,或明确标注的代码锚点;不包含任何 GUI 目测结论。
 > - **⏳ 待人工**:需 GUI 交互或人眼判断,附操作步骤与预期,一律未预标绿。
 >
-> **实测基线(2026-10-18,分支 `feat/phase4`,HEAD `a9af7a8`)**:
+> **实测基线(2026-10-18,分支 `feat/phase4`,HEAD `706cb26`)**:
 >
 > - `Scripts/test.sh` 全量 **231/231 绿**(三期基线 199 → 四期 231,只增不减,净增 32)。
 > - 中英 L10n 各 **121** 键,键集 diff 为空(121:121 1:1)。
@@ -17,21 +17,23 @@
 ### 1. 全量测试 231/231 绿 — ✅
 
 ```text
-$ Scripts/test.sh > /tmp/t7-full.log 2>&1; echo EXIT=$?
+$ Scripts/test.sh > /tmp/t7b-full.log 2>&1; echo EXIT=$?
 EXIT=0
 ```
 
-`/tmp/t7-full.log` 中 5 组结果行原文:
+`/tmp/t7b-full.log` 中 5 组结果行原文:
 
 ```text
-✔ Test run with 66 tests in 6 suites passed after 0.059 seconds.
-✔ Test run with 48 tests in 4 suites passed after 0.116 seconds.
-✔ Test run with 14 tests in 2 suites passed after 0.193 seconds.
+✔ Test run with 66 tests in 6 suites passed after 0.061 seconds.
+✔ Test run with 48 tests in 4 suites passed after 0.101 seconds.
+✔ Test run with 14 tests in 2 suites passed after 0.192 seconds.
 ✔ Test run with 29 tests in 8 suites passed after 0.090 seconds.
-✔ Test run with 74 tests in 7 suites passed after 0.253 seconds.
+✔ Test run with 74 tests in 7 suites passed after 0.250 seconds.
 ```
 
 合计 66 + 48 + 14 + 29 + 74 = **231**,exit 0,无 skip、无 fail。
+
+> 注:每行末尾的秒级计时为当次运行值,因机而异、不可精确复现;测试计数(231)与 exit(0)可复现。
 
 ### 2. 删除红线 grep:零 unlink/removeItem 实现,唯一 trashItem 实现 — ✅
 
@@ -76,13 +78,16 @@ en_keys=121
 
 ```text
 $ swift build 2>&1 | grep -E "error:|Build complete" | tail -3
-Build complete! (1.51秒)
+Build complete! (2.35秒)
 ```
+
+> 注:构建耗时因机而异;`Build complete` 与零 error 可复现。
 
 ### 6. 本分支四期提交序列 — ✅
 
 ```text
 $ git log --oneline
+706cb26 fix(Raccoon): 确认弹窗逐项列出已选节点与体积(与设计一致)
 a9af7a8 feat(Raccoon): treemap 渲染——squarified 布局 Canvas 绘制、点击下钻、空态
 4f73374 fix(AppCore): 磁盘分析按当前排除清单重建保护层;补排除新增回归测试;others 计数格式改 %ld
 4998509 feat(Raccoon): 磁盘分析入口转正——phase 驱动主页、列表视图、面包屑、确认弹窗与报告来源标注(双语文案)
@@ -96,7 +101,7 @@ f4c4a82 fix(DiskKit): 文件叶子节点 containsProtected 直评 isDenied(契�
 03671c2 docs(spec): 四期设计——磁盘分析(只读盘点定预算,treemap 自研,递归勾选门禁)
 ```
 
-## 二、⏳ 待人工项(12 项,一律未预标绿)
+## 二、⏳ 待人工项(13 项,一律未预标绿)
 
 ### A1. 真实家目录扫描与权限墙计数展示 — ⏳ 待人工
 
@@ -158,6 +163,11 @@ f4c4a82 fix(DiskKit): 文件叶子节点 containsProtected 直评 isDenied(契�
 - [ ] 步骤:清理一次后退出应用,重新启动进入主页。
 - 预期:历史记录仍可读,「上次清理释放 X」回显正确;含旧记录(nil source)的历史不显示来源标注、不报错。
 
+### A13. vanished(清理前文件已被外部删除)— ⏳ 待人工
+
+- [ ] 步骤:勾选某文件/目录后、点「清理」确认前,在 Finder/终端外部删除该路径(或等其自然消失),再确认清理。
+- 预期:报告计入 vanished(不计入释放量、不算 trashed);对应节点从树中移除;无报错、无残留勾选;若被清节点是当前下钻目录或其面包屑祖先,视图回退至最近存活祖先。
+
 ## 已知限制
 
 引用 spec §9 全部五条(README「已知限制」节已同步):
@@ -173,6 +183,6 @@ f4c4a82 fix(DiskKit): 文件叶子节点 containsProtected 直评 isDenied(契�
 ## 统计
 
 - **✅ 自动核验:6 项**(全量测试、删除红线 grep、工具链、L10n、swift build、提交序列)。
-- **⏳ 待人工:12 项**(A1–A12),每项均为 `- [ ]` 未勾选,给出操作步骤与预期,无一预标绿。
+- **⏳ 待人工:13 项**(A1–A13),每项均为 `- [ ]` 未勾选,给出操作步骤与预期,无一预标绿。
 
 **结论**:工程侧自动可核验面全部为绿(231/231、L10n 121:121、安全 grep 符合期望、swift build 通过);四期功能与交互的人工验收尚未执行,本文档不宣称任何未真机验证项为「满足」。
