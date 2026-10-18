@@ -1,5 +1,7 @@
 import SwiftUI
 import AppCore
+import MenuBarKit
+import UserNotifications
 
 @main
 struct RaccoonApp: App {
@@ -17,14 +19,29 @@ struct RaccoonApp: App {
         get { _navigation.wrappedValue }
         nonmutating set { _navigation.wrappedValue = newValue }
     }
+    // 菜单栏 VM 同样是跨 scene 的唯一实例:标签与下拉面板读同一份快照。
+    private var _menuBarVM: State<MenuBarMonitorViewModel>
+    var menuBarVM: MenuBarMonitorViewModel { _menuBarVM.wrappedValue }
+
+    // UNUserNotificationCenter.delegate 是 weak,必须由 App 强持有,
+    // 否则前台横幅的代理方法永远不会被调用。
+    private let notificationDelegate = RaccoonNotificationDelegate()
 
     init() {
         _exclusions = State(wrappedValue: ExclusionsStore())
         _navigation = State(wrappedValue: NavigationModel())
+        let menuBarVM = MenuBarMonitorViewModel(
+            sampler: LiveSystemSampler(),
+            preferences: UserDefaultsPreferenceStore(),
+            notifier: UNNotifier(),
+            loginItem: SMAppServiceLoginItem())
+        _menuBarVM = State(wrappedValue: menuBarVM)
+        UNUserNotificationCenter.current().delegate = notificationDelegate
     }
 
     var body: some Scene {
-        WindowGroup {
+        // id 供菜单栏面板的 openWindow(id:) 复用同一主窗口,而不是再开一个副本。
+        WindowGroup(id: "main") {
             RootView(exclusions: exclusions, navigation: navigation)
                 .frame(minWidth: 860, minHeight: 560)
                 // 27.0 SDK 无 Scene.windowTitle;用内容级 navigationTitle 承担窗口标题。
@@ -34,5 +51,13 @@ struct RaccoonApp: App {
         Settings {
             SettingsView(exclusions: exclusions)
         }
+        // .task 在 MenuBarLabelView 内启动采样,不在此处 start:App init 早于
+        // 视图生命周期,启动即建循环会拖慢冷启动。
+        MenuBarExtra {
+            MenuBarPanelView(vm: menuBarVM, navigation: navigation)
+        } label: {
+            MenuBarLabelView(vm: menuBarVM)
+        }
+        .menuBarExtraStyle(.window)
     }
 }
