@@ -167,6 +167,18 @@ final class MonitorViewModelTests {
         vm.stop()
     }
 
+    @Test func persistentCPUFailureSurfacesUnavailableThenRecovers() {
+        let (vm, sampler) = makeVM()
+        sampler.cpuFails = true
+        vm.refreshFast()
+        #expect(!vm.cpuUnavailable)            // 首次失败可能只是瞬时抖动
+        vm.refreshFast()                       // 连续失败 → 暂不可用
+        #expect(vm.cpuUnavailable)
+        sampler.cpuFails = false
+        vm.refreshFast()
+        #expect(!vm.cpuUnavailable)            // 成功即清零
+    }
+
     @Test func setNetworkStoresStatus() {
         let (vm, _) = makeVM()
         #expect(vm.network == nil)

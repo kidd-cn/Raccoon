@@ -105,13 +105,16 @@ struct MonitorHomeView: View {
         if volumes.isEmpty {
             UnavailableCard(title: loc("monitor.disk.system"), icon: "internaldrive")
         } else {
-            let primaryIndex = volumes.firstIndex(where: \.isSystemDisk) ?? 0
+            // 没有任何卷被判定为系统盘时不把首卷硬当系统盘:仍展示首卷,但不贴标识。
+            let systemIndex = volumes.firstIndex(where: \.isSystemDisk)
+            let primaryIndex = systemIndex ?? 0
             let primary = volumes[primaryIndex]
             let others = volumes.enumerated()
                 .filter { $0.offset != primaryIndex }
                 .map(\.element)
             VStack(alignment: .leading, spacing: 12) {
-                SystemDiskCard(volume: primary)
+                SystemDiskCard(volume: primary,
+                               title: systemIndex == nil ? nil : loc("monitor.disk.system"))
                 if !others.isEmpty {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
                         ForEach(Array(others.enumerated()), id: \.offset) { _, volume in
@@ -152,6 +155,8 @@ struct MonitorHomeView: View {
                     cpuValue(loc("monitor.cpu.system"), latest.systemPct)
                     cpuValue(loc("monitor.cpu.idle"), latest.idlePct)
                 }
+            } else if vm.cpuUnavailable {
+                Text(loc("monitor.unavailable")).foregroundStyle(.secondary)
             } else {
                 Text(loc("monitor.cpu.pending")).foregroundStyle(.secondary)
             }
@@ -449,18 +454,22 @@ private struct StatusCard: View {
 
 private struct SystemDiskCard: View {
     let volume: VolumeInfo
+    /// nil = 无卷可判定为系统盘:标题退化为卷名,不误标「系统盘」。
+    let title: String?
 
     private var usedBytes: Int64 { max(0, volume.totalBytes - volume.availableBytes) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(loc("monitor.disk.system"), systemImage: "internaldrive")
+            Label(title ?? volume.name, systemImage: "internaldrive")
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
-            Text(volume.name)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            if title != nil {
+                Text(volume.name)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(byteText(volume.availableBytes))
                     .font(.title2).bold().monospacedDigit()

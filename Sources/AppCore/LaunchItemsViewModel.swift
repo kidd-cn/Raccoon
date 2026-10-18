@@ -86,6 +86,9 @@ public final class LaunchItemsViewModel {
         let protection = effectiveProtection
         // load 之后新增的排除也必须拦住:重建后的 store 会在门禁处短路,零触达文件系统。
         guard !protection.isDenied(row.item.path) else {
+            // 扫描后、确认前保护状态被外部排除收紧:记录原因,让确认卡关闭并展示它。
+            // 重入路径不写 lastError,UI 才能区分「第一次仍在飞」与「门禁挡下」。
+            lastError = "protected"
             reload()
             return false
         }

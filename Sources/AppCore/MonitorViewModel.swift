@@ -36,6 +36,9 @@ public final class MonitorViewModel {
     /// CPU 历史曲线:内部为 SampleRing(容量 60,溢出弃最旧),最旧在前;
     /// 只读投影(存储在 ring 里,外部不可直接改写)。
     public var cpuHistory: [CPULoad] { ring.values }
+    /// CPU 持续采集失败(连续两次及以上取不到 tick):视图据此显示「暂不可用」,
+    /// 而不是永远停在「正在采集首个样本…」。成功后立即清零。
+    public private(set) var cpuUnavailable = false
 
     private let sampler: SystemSampling
     private let fastInterval: TimeInterval
@@ -49,6 +52,8 @@ public final class MonitorViewModel {
     /// 恢复后首个采样即可继续出点。
     private var previousTicks: [Int32]?
     private var ring = SampleRing<CPULoad>(capacity: 60)
+    /// cpuTicks() 连续失败次数:单次失败可能只是瞬时抖动,连续两次才判「暂不可用」。
+    private var cpuFailureCount = 0
 
     public init(sampler: SystemSampling, fastInterval: TimeInterval = 2, slowInterval: TimeInterval = 30) {
         self.sampler = sampler
@@ -88,7 +93,14 @@ public final class MonitorViewModel {
         if let stats = sampler.memory() {
             memory = stats
         }
-        guard let current = sampler.cpuTicks() else { return }
+        guard let current = sampler.cpuTicks() else {
+            cpuFailureCount += 1
+            // 非首次失败才置不可用:首轮失败仍可能是挂起中的瞬时状态。
+            if cpuFailureCount >= 2 { cpuUnavailable = true }
+            return
+        }
+        cpuFailureCount = 0
+        cpuUnavailable = false
         if let load = computeCPULoad(previous: previousTicks, current: current) {
             ring.append(load)
         }

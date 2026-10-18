@@ -45,6 +45,19 @@ private func plistData(_ value: Any) throws -> Data {
         #expect(zoo.label == "com.zoo.agent" && !zoo.parseFailed)
     }
 
+    /// 扩展名大小写不敏感:`.PLIST` 也是 launchd 会读取的配置文件,不得漏列。
+    @Test func uppercasePlistExtensionIsIncluded() throws {
+        let fx = try makeFixtureDir()
+        defer { try? FileManager.default.removeItem(at: fx) }
+        try plistData(["Label": "com.upper.agent"])
+            .write(to: fx.appendingPathComponent("com.upper.agent.PLIST"))
+
+        let items = LaunchItemScanner().items(inDirectoryPath: fx.path)
+
+        #expect(items.map(\.fileName) == ["com.upper.agent.PLIST"])
+        #expect(items.first?.label == "com.upper.agent")
+    }
+
     /// 目录不存在是常态(全新机器常没有 ~/Library/LaunchAgents)→ 空数组,不抛错。
     @Test func missingDirectoryYieldsEmptyList() throws {
         let fx = try makeFixtureDir()

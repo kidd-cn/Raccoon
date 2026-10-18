@@ -72,8 +72,12 @@ struct LaunchItemsView: View {
         // 双击排队时第二次必须原地返回,不得在第一次在飞期间把 sheet 关掉再重开。
         guard !vm.isDisabling else { return }
         Task {
-            // disable 返回 false(被守卫挡下/前一刻变成受保护):保持当前 sheet 状态不动。
-            guard await vm.disable(row) else { return }
+            // disable 返回 false:重入(第一次仍在飞,不写 lastError)保持 sheet 不动;
+            // 被实时门禁挡下(写 lastError)则关闭确认卡,由页面展示可读原因。
+            guard await vm.disable(row) else {
+                if vm.lastError != nil { presentation = nil }
+                return
+            }
             if let report = vm.lastReport {
                 presentation = .report(report)
             } else {

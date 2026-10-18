@@ -185,6 +185,7 @@ final class LaunchItemsViewModelTests {
 
         let secondRan = await vm.disable(row)   // 重入:必须 no-op 且报告未真正执行
         #expect(!secondRan)
+        #expect(vm.lastError == nil)            // 重入路径不写 lastError(第一次仍在飞)
         let during = await trash.calls
         #expect(during.count == 1)
 
@@ -211,7 +212,9 @@ final class LaunchItemsViewModelTests {
 
         // 即便拿一条 denied 快照为 false 的旧行,实时 protection 仍须拦截触达。
         let stale = LaunchItemsViewModel.Row(item: row.item, denied: false)
-        await vm.disable(stale)
+        let ran = await vm.disable(stale)
+        #expect(!ran)
+        #expect(vm.lastError == "protected")    // 门禁挡下的 false 必须带原因(UI 据此关卡)
 
         let calls = await trash.calls
         #expect(calls.isEmpty)

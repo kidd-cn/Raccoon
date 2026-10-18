@@ -45,7 +45,9 @@ public struct LaunchItemScanner: Sendable {
             return []
         }
         return names
-            .filter { ($0 as NSString).pathExtension == "plist" }
+            // plist 扩展名大小写不敏感:macOS 文件系统本身默认大小写不敏感,
+            // `.PLIST` 同样是 launchd 会读的配置文件,不能只在 UI 里静默漏掉。
+            .filter { ($0 as NSString).pathExtension.lowercased() == "plist" }
             .map { name in
                 let path = (dirPath as NSString).appendingPathComponent(name)
                 return LaunchItemParser.parse(fileURL: URL(fileURLWithPath: path))
