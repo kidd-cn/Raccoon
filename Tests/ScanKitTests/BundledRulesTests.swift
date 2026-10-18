@@ -81,6 +81,12 @@ import CleanKit
         }
     }
 
+    // 「other」是 nil 组保留 id;规则显式 tool="other" 会在 AI 页 ForEach 撞 id
+    @Test func noRuleToolUsesReservedOtherId() throws {
+        let lr = try RuleStore().loadBundled()
+        #expect(lr.rules.allSatisfy { $0.tool != "other" })
+    }
+
     // 用户数据整棵目录只允许以精确子路径为根;~/.claude、~/.ollama 本体永不作根(spec §5)
     @Test func aiRuleRootsAreNotUserDataDirectories() throws {
         let lr = try RuleStore().loadBundled()

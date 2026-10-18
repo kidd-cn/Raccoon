@@ -93,3 +93,13 @@
 "orphans.clean.do" = "Clean and Move to Trash";
 "orphans.confirm.title" = "Confirm Leftover Cleanup";
 "orphans.defaultUncheckedHint" = "Items with unconfirmed ownership stay unchecked. Review before selecting.";
+"ai.startHint" = "Scan AI tools' caches, logs and re-downloadable runtimes or model caches.\nSessions, skills and other personal data are never listed.";
+"ai.empty" = "No regenerable AI content found";
+"ai.tool.claude-desktop" = "Claude Desktop";
+"ai.tool.claude-code" = "Claude Code";
+"ai.tool.cursor" = "Cursor";
+"ai.tool.codex" = "Codex";
+"ai.tool.ollama" = "Ollama";
+"ai.tool.huggingface" = "Hugging Face";
+"ai.tool.chatgpt" = "ChatGPT";
+"ai.tool.other" = "Other";

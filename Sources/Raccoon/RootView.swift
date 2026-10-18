@@ -1,4 +1,5 @@
 import SwiftUI
+import ScanKit
 import AppCore
 import CleanKit
 
@@ -14,7 +15,7 @@ enum Module: String, CaseIterable, Identifiable {
         case .monitor: "gauge.with.needle"
         }
     }
-    static var availableCases: [Module] { [.cleanup, .uninstall] }
+    static var availableCases: [Module] { [.cleanup, .uninstall, .aiCleanup] }
     static var comingSoonCases: [Module] { allCases.filter { !availableCases.contains($0) } }
 }
 
@@ -23,11 +24,16 @@ struct RootView: View {
     // 手写 @State 展开(本机 CLT 工具链缺 libSwiftUIMacros.dylib,见 RaccoonApp.swift 注释)。
     private var _vm: State<ScanViewModel>
     private var _uvm: State<UninstallViewModel>
+    private var _aiVM: State<ScanViewModel>
     private var _selection: State<Module>
 
     var vm: ScanViewModel {
         get { _vm.wrappedValue }
         nonmutating set { _vm.wrappedValue = newValue }
+    }
+    var aiVM: ScanViewModel {
+        get { _aiVM.wrappedValue }
+        nonmutating set { _aiVM.wrappedValue = newValue }
     }
     var uvm: UninstallViewModel {
         get { _uvm.wrappedValue }
@@ -43,9 +49,15 @@ struct RootView: View {
         self.exclusions = exclusions
         let history = JSONHistoryStore()
         let services = UninstallServices.make()
+        // 主清理页过滤 = 全集去 .ai;AI 页 = [.ai](spec D3:两页互不见对方类别,互不共享状态)
         _vm = State(wrappedValue: ScanViewModel(service: AppScanService(),
                                                 exclusions: exclusions,
-                                                history: history))
+                                                history: history,
+                                                categoryFilter: Set(RuleCategory.allCases).subtracting([.ai])))
+        _aiVM = State(wrappedValue: ScanViewModel(service: AppScanService(),
+                                                  exclusions: exclusions,
+                                                  history: history,
+                                                  categoryFilter: [.ai]))
         _uvm = State(wrappedValue: UninstallViewModel(discovery: services.discovery,
                                                       locator: services.locator,
                                                       orphanScanner: services.orphans,
@@ -73,13 +85,15 @@ struct RootView: View {
             .listStyle(.sidebar)
             .navigationTitle(loc("app.name"))
         } detail: {
-            // detail 按选择切换;两个模块各自持有状态机,互不干扰
+            // detail 按选择切换;三个模块各自持有状态机,互不干扰
             switch selection {
             case .uninstall:
                 UninstallHomeView(vm: uvm)
-            case .cleanup, .aiCleanup, .diskAnalysis, .monitor:
-                // 目前仅 cleanup 已实现;其余为侧边栏占位,后续接入时在此分流。
-                // 显式列全(不用 default):新增枚举 case 时由编译器强制更新。
+            case .aiCleanup:
+                AICleanupHomeView(vm: aiVM)
+                    .onAppear { aiVM.loadLastCleanup() }
+            case .cleanup, .diskAnalysis, .monitor:
+                // diskAnalysis/monitor 仍为侧边栏占位;显式列全:新增枚举 case 时由编译器强制更新。
                 CleanupHomeView(vm: vm)
                     .onAppear { vm.loadLastCleanup() }
             }
