@@ -2,6 +2,7 @@ import SwiftUI
 import ScanKit
 import AppCore
 import CleanKit
+import DiskKit
 
 enum Module: String, CaseIterable, Identifiable {
     case cleanup, uninstall, aiCleanup, diskAnalysis, monitor
@@ -15,7 +16,7 @@ enum Module: String, CaseIterable, Identifiable {
         case .monitor: "gauge.with.needle"
         }
     }
-    static var availableCases: [Module] { [.cleanup, .uninstall, .aiCleanup] }
+    static var availableCases: [Module] { [.cleanup, .uninstall, .aiCleanup, .diskAnalysis] }
     static var comingSoonCases: [Module] { allCases.filter { !availableCases.contains($0) } }
 }
 
@@ -25,6 +26,7 @@ struct RootView: View {
     private var _vm: State<ScanViewModel>
     private var _uvm: State<UninstallViewModel>
     private var _aiVM: State<ScanViewModel>
+    private var _diskVM: State<DiskAnalysisViewModel>
     private var _selection: State<Module>
 
     var vm: ScanViewModel {
@@ -42,6 +44,10 @@ struct RootView: View {
     var selection: Module {
         get { _selection.wrappedValue }
         nonmutating set { _selection.wrappedValue = newValue }
+    }
+    var diskVM: DiskAnalysisViewModel {
+        get { _diskVM.wrappedValue }
+        nonmutating set { _diskVM.wrappedValue = newValue }
     }
 
     @MainActor
@@ -63,6 +69,12 @@ struct RootView: View {
                                                       orphanScanner: services.orphans,
                                                       exclusions: exclusions,
                                                       history: history))
+        // 磁盘分析:scanner 仅作 hardRoots 来源;userExclusions 由 VM 在扫描/清理时按当前
+        // 排除清单实时重建(与 AppScanService 同口径),共享同一 history。
+        _diskVM = State(wrappedValue: DiskAnalysisViewModel(
+            scanner: DiskScanner(protection: ProtectionStore(userExclusions: exclusions.exclusions)),
+            exclusions: exclusions,
+            history: history))
         _selection = State(wrappedValue: .cleanup)
     }
 
@@ -92,8 +104,10 @@ struct RootView: View {
             case .aiCleanup:
                 AICleanupHomeView(vm: aiVM)
                     .onAppear { aiVM.loadLastCleanup() }
-            case .cleanup, .diskAnalysis, .monitor:
-                // diskAnalysis/monitor 仍为侧边栏占位;显式列全:新增枚举 case 时由编译器强制更新。
+            case .diskAnalysis:
+                DiskAnalysisHomeView(vm: diskVM)
+            case .cleanup, .monitor:
+                // monitor 仍为侧边栏占位;显式列全:新增枚举 case 时由编译器强制更新。
                 CleanupHomeView(vm: vm)
                     .onAppear { vm.loadLastCleanup() }
             }

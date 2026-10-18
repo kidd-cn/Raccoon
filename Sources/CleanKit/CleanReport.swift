@@ -13,10 +13,13 @@ public struct CleanReport: Codable, Equatable, Sendable {
     public let vanishedCount: Int
     public let snapshotCount: Int
     public let skipped: [SkippedItem]
+    public let source: String?
     public init(date: Date = Date(), freedBytes: Int64, trashedCount: Int,
-                vanishedCount: Int, snapshotCount: Int = 0, skipped: [SkippedItem]) {
+                vanishedCount: Int, snapshotCount: Int = 0, skipped: [SkippedItem],
+                source: String? = nil) {
         self.date = date; self.freedBytes = freedBytes; self.trashedCount = trashedCount
         self.vanishedCount = vanishedCount; self.snapshotCount = snapshotCount; self.skipped = skipped
+        self.source = source
     }
 }
 

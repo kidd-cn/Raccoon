@@ -106,3 +106,16 @@
 "ai.tool.huggingface" = "Hugging Face";
 "ai.tool.chatgpt" = "ChatGPT";
 "ai.tool.other" = "Other";
+"disk.idle.hint" = "Scan your home folder to see what is taking up space. Files are listed largest first; deletions always go to the Trash.";
+"disk.start" = "Start Scan";
+"disk.chooseFolder" = "Choose Folder…";
+"disk.progress.scanned" = "Scanned %@";
+"disk.view.treemap" = "Treemap";
+"disk.view.list" = "List";
+"disk.others" = "%ld items · %@";
+"disk.list.protected" = "Protected";
+"disk.root.home" = "Home";
+"disk.empty" = "Nothing to display";
+"disk.rescan" = "Rescan";
+"report.source.diskAnalysis" = "Disk Analysis";
+"disk.confirm.hint" = "Protected paths are never selected. Cleanup only moves files to the Trash.";

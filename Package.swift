@@ -20,17 +20,22 @@ let package = Package(
             dependencies: ["CleanKit"]
         ),
         .target(
+            name: "DiskKit",
+            dependencies: ["CleanKit"]
+        ),
+        .target(
             name: "AppCore",
-            dependencies: ["ScanKit", "CleanKit", "UninstallKit"]
+            dependencies: ["ScanKit", "CleanKit", "UninstallKit", "DiskKit"]
         ),
         .executableTarget(
             name: "Raccoon",
-            dependencies: ["AppCore", "ScanKit", "CleanKit", "UninstallKit"],
+            dependencies: ["AppCore", "ScanKit", "CleanKit", "UninstallKit", "DiskKit"],
             resources: [.process("Resources")]
         ),
         .testTarget(name: "CleanKitTests", dependencies: ["CleanKit"]),
         .testTarget(name: "ScanKitTests", dependencies: ["ScanKit", "CleanKit"]),
         .testTarget(name: "UninstallKitTests", dependencies: ["UninstallKit", "CleanKit"]),
+        .testTarget(name: "DiskKitTests", dependencies: ["DiskKit", "CleanKit"]),
         .testTarget(name: "AppCoreTests", dependencies: ["AppCore", "ScanKit", "CleanKit", "UninstallKit"]),
     ]
 )

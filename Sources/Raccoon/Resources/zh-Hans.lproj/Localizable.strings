@@ -106,3 +106,16 @@
 "ai.tool.huggingface" = "Hugging Face";
 "ai.tool.chatgpt" = "ChatGPT";
 "ai.tool.other" = "其他";
+"disk.idle.hint" = "扫描主目录，看清空间都被什么占用。文件按体积从大到小排列；删除只会移入废纸篓。";
+"disk.start" = "开始扫描";
+"disk.chooseFolder" = "选择文件夹…";
+"disk.progress.scanned" = "已扫描 %@";
+"disk.view.treemap" = "矩形树图";
+"disk.view.list" = "列表";
+"disk.others" = "%ld 项 · %@";
+"disk.list.protected" = "受保护";
+"disk.root.home" = "主目录";
+"disk.empty" = "没有可显示的内容";
+"disk.rescan" = "重新扫描";
+"report.source.diskAnalysis" = "磁盘分析";
+"disk.confirm.hint" = "受保护路径永不可勾选。清理只会移入废纸篓。";
