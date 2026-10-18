@@ -6,6 +6,14 @@ public struct CPULoad: Equatable, Sendable {
     public let userPct: Double
     public let systemPct: Double
     public let idlePct: Double
+
+    /// 显式 memberwise:合成的仅 internal,而 AppCore/Raccoon 是独立模块,
+    /// 采样假体/预览需在 MonitorKit 之外直接构造快照。
+    public init(userPct: Double, systemPct: Double, idlePct: Double) {
+        self.userPct = userPct
+        self.systemPct = systemPct
+        self.idlePct = idlePct
+    }
 }
 
 /// 纯函数:对扁平化 per-core tick 四元组 (user, system, idle, nice) 做跨采样差值。

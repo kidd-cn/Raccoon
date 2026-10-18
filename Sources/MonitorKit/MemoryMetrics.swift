@@ -12,6 +12,17 @@ public struct MemoryStats: Equatable, Sendable {
     public let wiredBytes: Int64
     /// 可清除空间:内存压力上来时可被回收的部分
     public let purgeableFreeBytes: Int64
+
+    /// 显式 memberwise:合成的仅 internal,而 AppCore/Raccoon 是独立模块,
+    /// 采样假体/预览需在 MonitorKit 之外直接构造快照。
+    public init(totalBytes: Int64, usedBytes: Int64, compressedBytes: Int64,
+                wiredBytes: Int64, purgeableFreeBytes: Int64) {
+        self.totalBytes = totalBytes
+        self.usedBytes = usedBytes
+        self.compressedBytes = compressedBytes
+        self.wiredBytes = wiredBytes
+        self.purgeableFreeBytes = purgeableFreeBytes
+    }
 }
 
 /// 纯函数组装。used = total - free - inactive - purgeable,负值夹到 0——
