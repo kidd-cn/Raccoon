@@ -10,6 +10,8 @@ struct CleanReportView: View {
     let onBack: (() -> Void)?
     let onRescan: (() -> Void)?
     var onScanOrphans: (() -> Void)? = nil
+    /// 来源标注(如「磁盘分析」):非 nil 时在标题下以小号次要文字展示。
+    var sourceLabel: String? = nil
 
     private func reasonText(_ code: String) -> String {
         let key = "reason.\(code)"
@@ -23,6 +25,10 @@ struct CleanReportView: View {
                 .font(.system(size: 44)).foregroundStyle(.green)
                 .accessibilityHidden(true)
             Text(loc("report.done")).font(.title2).bold()
+            if let sourceLabel {
+                Text(sourceLabel)
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             // freed 口径:仅统计成功移入废纸篓的字节;vanished(应用抢先删)与快照不计入
             Text(loc("report.freed", byteText(report.freedBytes))).monospacedDigit()
             Text(loc("report.trashed", report.trashedCount)).monospacedDigit().foregroundStyle(.secondary)
