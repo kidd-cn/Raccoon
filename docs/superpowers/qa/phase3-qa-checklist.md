@@ -6,6 +6,7 @@
 > - **⏳ 待人工**:需 GUI 交互或人眼判断,附操作步骤与预期,一律未预标绿。
 >
 > **实测基线(2026-10-18,分支 `feat/phase3`,HEAD `ec49f79`)**:
+>
 > - `Scripts/test.sh` 全量 **199/199 绿**:UninstallKit **66** / ScanKit **48** / CleanKit **27** / AppCore **58**(二期基线 183 → 三期 199,只增不减,净增 16)。
 > - 中英 L10n 各 **105** 键,键集 diff 为空(105:105 1:1)。
 > - 终验安全 grep 三条均符合期望,无任何越期望命中(原文见下)。
@@ -40,13 +41,13 @@ $ grep -rni "authorization\|osascript\|launchctl\|SMJobBless\|withPrivileged" So
 
 `Scripts/test.sh` 实测(exit 0,swift-testing,本地 CLT 工具链):
 
-| 模块 | 二期基线 | 三期实测 | 增量 |
-| ---- | -------- | -------- | ---- |
-| UninstallKit | 66 | 66 | 0 |
-| ScanKit | 40 | 48 | +8 |
-| CleanKit | 27 | 27 | 0 |
-| AppCore | 50 | 58 | +8 |
-| **合计** | **183** | **199** | **+16** |
+| 模块           | 二期基线    | 三期实测    | 增量      |
+| ------------ | ------- | ------- | ------- |
+| UninstallKit | 66      | 66      | 0       |
+| ScanKit      | 40      | 48      | +8      |
+| CleanKit     | 27      | 27      | 0       |
+| AppCore      | 50      | 58      | +8      |
+| **合计**       | **183** | **199** | **+16** |
 
 四个 target 的 `Test run with … passed` 逐套核对,无 skip、无 fail。
 
@@ -178,14 +179,14 @@ diff <(grep -o '^"[^"]*"' Sources/Raccoon/Resources/zh-Hans.lproj/Localizable.st
 
 > 状态口径同本文档:「✅」仅表示自动化可核验面有证据,不等于真机验收通过;「⏳」为纯人工;「混合」为自动半段 + 人工半段。
 
-| Done 条目 | 状态 | 对应清单项 | 证据/说明 |
-| --------- | ---- | ---------- | --------- |
-| 9.1 侧边栏「AI 清理」可用;主清理页无 AI 条目;两页互不串状态 | 混合 | 自动 4 + A1/A2/A3 | 自动:`categoryFilter_*` 三条 + `aiPage_endToEnd`;人工:入口可用性、主页面目测、交替操作。 |
-| 9.2 AI 页按工具分组;cautious 默认不勾、单独确认;safe 默认勾 | 混合 | 自动 5 + A4/A5/A6 | 自动:`AIToolGroupsTests` 四条 + 端到端默认勾口径;人工:组序目测、橙色、弹窗分区。 |
-| 9.3 清理只进废纸篓,报告与历史如实;未勾选与 skipped 保留 | 混合 | 自动 1/7 + A7/A8 | 自动:trash 唯一实现 grep + CleanKit 收敛测试;人工:废纸篓放回、报告数字目测。 |
-| 9.4 全程无提权、无 `rm`/unlink;`CleanExecutor` 仍是唯一删除路径(终审 grep 复核) | ✅ | 自动核验项 1 | 三条 grep 原文见上:unlink 零实现、`trashItem` 唯一实现(TrashService.swift:21)、提权模式零命中。 |
-| 9.5 `Scripts/test.sh` 全绿;L10n 键集 en/zh 1:1;CI 推送后实测绿 | ✅ | 自动 3/3 | 本地 199/199、105:105 已实测;经用户指示合并推送至 `main`(`1592bf4`)后,GitHub Actions run [39095001666](https://github.com/kidd-cn/Raccoon/actions/runs/39095001666) 实测 **success**——构建、测试、L10n 键集一致性全过(2026-10-18,1m23s)。 |
-| 9.6 README 与 QA 清单如实更新,人工项不标绿 | ✅ | 本文档 + README | README 补三期功能、已知限制、Schema `tool` 字段、路线图状态;本清单 12 个人工项全部未预标绿。 |
+| Done 条目                                                      | 状态 | 对应清单项           | 证据/说明                                                                                                                                                                                                    |
+| ------------------------------------------------------------ | -- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 9.1 侧边栏「AI 清理」可用;主清理页无 AI 条目;两页互不串状态                         | 混合 | 自动 4 + A1/A2/A3 | 自动:`categoryFilter_*` 三条 + `aiPage_endToEnd`;人工:入口可用性、主页面目测、交替操作。                                                                                                                                        |
+| 9.2 AI 页按工具分组;cautious 默认不勾、单独确认;safe 默认勾                    | 混合 | 自动 5 + A4/A5/A6 | 自动:`AIToolGroupsTests` 四条 + 端到端默认勾口径;人工:组序目测、橙色、弹窗分区。                                                                                                                                                    |
+| 9.3 清理只进废纸篓,报告与历史如实;未勾选与 skipped 保留                          | 混合 | 自动 1/7 + A7/A8  | 自动:trash 唯一实现 grep + CleanKit 收敛测试;人工:废纸篓放回、报告数字目测。                                                                                                                                                      |
+| 9.4 全程无提权、无 `rm`/unlink;`CleanExecutor` 仍是唯一删除路径(终审 grep 复核) | ✅  | 自动核验项 1         | 三条 grep 原文见上:unlink 零实现、`trashItem` 唯一实现(TrashService.swift:21)、提权模式零命中。                                                                                                                                 |
+| 9.5 `Scripts/test.sh` 全绿;L10n 键集 en/zh 1:1;CI 推送后实测绿         | ✅  | 自动 3/3          | 本地 199/199、105:105 已实测;经用户指示合并推送至 `main`(`1592bf4`)后,GitHub Actions run [39095001666](https://github.com/kidd-cn/Raccoon/actions/runs/39095001666) 实测 **success**——构建、测试、L10n 键集一致性全过(2026-10-18,1m23s)。 |
+| 9.6 README 与 QA 清单如实更新,人工项不标绿                                | ✅  | 本文档 + README    | README 补三期功能、已知限制、Schema `tool` 字段、路线图状态;本清单 12 个人工项全部未预标绿。                                                                                                                                              |
 
 ## 统计
 

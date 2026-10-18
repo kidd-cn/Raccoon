@@ -99,6 +99,9 @@
 "ai.tool.claude-code" = "Claude Code";
 "ai.tool.cursor" = "Cursor";
 "ai.tool.codex" = "Codex";
+"ai.tool.hermes" = "Hermes";
+"ai.tool.openclaw" = "OpenClaw";
+"ai.tool.deepseek-harness" = "DeepSeek Harness";
 "ai.tool.ollama" = "Ollama";
 "ai.tool.huggingface" = "Hugging Face";
 "ai.tool.chatgpt" = "ChatGPT";

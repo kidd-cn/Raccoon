@@ -93,6 +93,7 @@ import CleanKit
     @Test func aiRuleToolsAreKnownValues() throws {
         let lr = try RuleStore().loadBundled()
         let known: Set<String> = ["claude-desktop", "claude-code", "cursor", "codex",
+                                  "hermes", "openclaw", "deepseek-harness",
                                   "ollama", "huggingface", "chatgpt"]
         for rule in lr.rules where rule.category == .ai {
             #expect(rule.tool.map(known.contains) == true,
@@ -100,11 +101,13 @@ import CleanKit
         }
     }
 
-    // 用户数据整棵目录只允许以精确子路径为根;~/.claude、~/.ollama 本体永不作根(spec §5)
+    // 用户数据整棵目录只允许以精确子路径为根;~/.claude、~/.ollama、~/.codex、
+    // ~/.hermes、~/.openclaw 本体永不作根(spec §5)
     @Test func aiRuleRootsAreNotUserDataDirectories() throws {
         let lr = try RuleStore().loadBundled()
         let home = ProtectionStore.normalize("~")
-        let forbidden = [home + "/.claude", home + "/.ollama"]
+        let forbidden = [home + "/.claude", home + "/.ollama", home + "/.codex",
+                         home + "/.hermes", home + "/.openclaw"]
         for rule in lr.rules where rule.category == .ai {
             #expect(!forbidden.contains(ProtectionStore.normalize(rule.path)),
                     "\(rule.id) 规则根不得为整棵用户数据目录(只允许精确子路径)")

@@ -12,7 +12,8 @@ public struct AIToolGroup: Identifiable, Equatable, Sendable {
 public enum AIToolGrouper {
     /// 组的展示顺序;规则新增未收录工具值时按字典序排其后、「其他」殿后。
     public static let canonicalOrder: [String] = [
-        "claude-desktop", "claude-code", "cursor", "codex", "ollama", "huggingface", "chatgpt"]
+        "claude-desktop", "claude-code", "cursor", "codex", "hermes", "openclaw",
+        "deepseek-harness", "ollama", "huggingface", "chatgpt"]
 
     public static func groups(in hits: [ScanHit]) -> [AIToolGroup] {
         let byTool = Dictionary(grouping: hits, by: \.tool)
