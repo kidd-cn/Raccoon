@@ -16,7 +16,7 @@ enum Module: String, CaseIterable, Identifiable {
         case .monitor: "gauge.with.needle"
         }
     }
-    static var availableCases: [Module] { [.cleanup, .uninstall, .aiCleanup, .diskAnalysis] }
+    static var availableCases: [Module] { [.cleanup, .uninstall, .aiCleanup, .diskAnalysis, .monitor] }
     static var comingSoonCases: [Module] { allCases.filter { !availableCases.contains($0) } }
 }
 
@@ -27,6 +27,7 @@ struct RootView: View {
     private var _uvm: State<UninstallViewModel>
     private var _aiVM: State<ScanViewModel>
     private var _diskVM: State<DiskAnalysisViewModel>
+    private var _monitorVM: State<MonitorViewModel>
     private var _selection: State<Module>
 
     var vm: ScanViewModel {
@@ -48,6 +49,10 @@ struct RootView: View {
     var diskVM: DiskAnalysisViewModel {
         get { _diskVM.wrappedValue }
         nonmutating set { _diskVM.wrappedValue = newValue }
+    }
+    var monitorVM: MonitorViewModel {
+        get { _monitorVM.wrappedValue }
+        nonmutating set { _monitorVM.wrappedValue = newValue }
     }
 
     @MainActor
@@ -75,6 +80,8 @@ struct RootView: View {
             scanner: DiskScanner(protection: ProtectionStore(userExclusions: exclusions.exclusions)),
             exclusions: exclusions,
             history: history))
+        // 监控:只读采样,start 由 MonitorHomeView 的 .task 触发;不在此处建循环。
+        _monitorVM = State(wrappedValue: MonitorViewModel(sampler: LiveSystemSampler()))
         _selection = State(wrappedValue: .cleanup)
     }
 
@@ -87,10 +94,13 @@ struct RootView: View {
                             .tag(module)
                     }
                 }
-                Section(loc("sidebar.comingSoon")) {
-                    ForEach(Module.comingSoonCases) { module in
-                        Label(loc("module.\(module.rawValue)"), systemImage: module.icon)
-                            .foregroundStyle(.tertiary)
+                // 全部模块启用后该组为空:空 Section 仍会渲染列头,故整组隐藏
+                if !Module.comingSoonCases.isEmpty {
+                    Section(loc("sidebar.comingSoon")) {
+                        ForEach(Module.comingSoonCases) { module in
+                            Label(loc("module.\(module.rawValue)"), systemImage: module.icon)
+                                .foregroundStyle(.tertiary)
+                        }
                     }
                 }
             }
@@ -106,8 +116,13 @@ struct RootView: View {
                     .onAppear { aiVM.loadLastCleanup() }
             case .diskAnalysis:
                 DiskAnalysisHomeView(vm: diskVM)
-            case .cleanup, .monitor:
-                // monitor 仍为侧边栏占位;显式列全:新增枚举 case 时由编译器强制更新。
+            case .monitor:
+                // 跨模块跳转(建议卡/工具入口)通过回调改选中项,复用侧边栏导航
+                MonitorHomeView(vm: monitorVM) { module in
+                    selection = module
+                }
+            case .cleanup:
+                // 显式列全:新增枚举 case 时由编译器强制更新。
                 CleanupHomeView(vm: vm)
                     .onAppear { vm.loadLastCleanup() }
             }
