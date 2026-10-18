@@ -36,6 +36,8 @@
 | D4 | 交互分工 | treemap 矩形点击=**下钻**,面包屑返回;**勾选只在列表**(大小降序);矩形不承担勾选 | 矩形多选易误触;列表是小目标好点与无障碍兜底 |
 | D5 | 权限墙 | 遍历遇 denied 子树:计入已读到的体量,节点标「无权限(部分)」,并计入 skipped 口径如实显示 | 实测 449 次拒绝是常态;不静默、不假装扫全 |
 | D6 | 模块边界 | 新 SPM target **DiskKit**(遍历聚合 + squarify,纯逻辑全可测);VM 进 AppCore;视图进 Raccoon | 沿用 ScanKit/CleanKit/UninstallKit 分层惯例;逻辑与 UI 分离可测 |
+| D7 | 勾选门禁(递归) | 节点可勾选 = 自身路径未被 `isDenied` 拒绝 **且** 子树内不含任何受保护/已排除路径(DiskScanner 自底向上派生 `containsProtected` 标志,零额外遍历成本);**扫描根永不可勾选** | 防止「勾 `~/Library` 整体」绕过硬保护——一至三期引擎从不进入 denied 路径,此类提交本不可能发生,本期必须等价封堵 |
+| D8 | 清理后就地更新 | 清理完成后树**就地更新**:已清节点移除、体量差值上溯全部祖先;skipped 节点保留并保持勾选;若被清节点是当前下钻目录或其面包屑祖先,视图回退至最近存活祖先;报告「返回列表」回到更新后的树 | 复用一/二期「移除非 skipped、保留 skipped、返回结果」口径;分钟级扫描不能强迫重扫 |
 
 ## 4. 总体架构
 
@@ -50,7 +52,7 @@ AppCore:   DiskAnalysisViewModel(状态机、勾选门禁、删除编排、历�
 CleanKit:  TrashServicing / CleanReport(+source) / JSONHistoryStore(仅类型扩展,删除实现不动)
 ```
 
-- `DiskNode`:path、name、sizeBytes、children、isDeniedTruncated。删除单元 = 用户勾选的**任意节点(文件或目录)**;**勾选集约束:同一祖先链上只允许勾选最上层节点**——勾选某目录后其后代自动禁勾(防双重删除与体量重复计数),由 VM 强制。
+- `DiskNode`:path、name、sizeBytes、children、isDeniedTruncated、containsProtected(扫描期自底向上派生)。体量口径:512 字节**块占用**(与 `du` 一致,非 `st_size` 逻辑大小),不做硬链接去重。删除单元 = 用户勾选的**任意节点(文件或目录)**;**勾选集约束:同一祖先链上只允许勾选最上层节点**——勾选某目录后其后代自动禁勾(防双重删除与体量重复计数),由 VM 强制。
 - 遍历规则:symlink 不跟随(防环);`.Trash` 剪枝;`ProtectionStore.isDenied` 路径**可入不可删**——只读遍历无害,删除被门禁拦下,节点标「受保护」;I/O denied 子树按 D5 如实计数。
 - 扫描进行中删除入口禁用;取消扫描 = 丢弃部分结果、回 idle(如实、简单)。
 
@@ -59,13 +61,13 @@ CleanKit:  TrashServicing / CleanReport(+source) / JSONHistoryStore(仅类型扩
 - 空态:说明文案(「扫描磁盘占用,只读分析;清理需显式勾选并只进废纸篓」)+「开始扫描」+「选择文件夹…」。
 - 扫描态:进度 = 已扫描字节数 + 当前目录路径(截断显示);「取消」按钮。
 - 结果态:顶部面包屑(根 = 本次扫描根);treemap 默认视图,列表切换;矩形显示名称 + 人读体积,选中高亮;列表行含勾选框(受保护/排除项勾选禁用并标注)。
-- 底部条与三期一致:「已选 N 项 · X」+「清理…」;确认弹窗逐项列出体积;清理后复用报告页;历史来源标识「磁盘分析」。
+- 底部条与三期一致:「已选 N 项 · X」+「清理…」;确认弹窗逐项列出体积;清理后复用报告页并按 D8 就地更新树。报告页页头显示来源标注:`source == "disk-analysis"` 显示「磁盘分析」,其余(含旧记录 nil)**不显示**来源标注、不冒称;history.json 始终写入 source(机器可读)。
 - L10n:新增键 en/zh 1:1,zh 值全角标点。
 
 ## 6. 安全与四道门映射
 
-1. **硬保护**:`ProtectionStore.isDenied` 项节点可见,但不可勾选删除。
-2. **用户排除**:同上(isDenied 已含用户排除)。
+1. **硬保护**:`ProtectionStore.isDenied` 项节点可见,但不可勾选删除;且按 D7 **递归生效**——子树含任何受保护/排除内容的目录不可整目录勾选,扫描根永不可勾选。
+2. **用户排除**:同上(isDenied 已含用户排除,递归门禁同样适用)。
 3. **安全分级**:分析结果无「safe 默认勾」概念——**一律默认不勾 + 显式确认**,比规则库更保守。
 4. **trash-only**:唯一删除实现仍是 `TrashService.swift:21` 的 `trashItem`;零 `unlink`/`removeItem` 实现代码;终验 grep 守卫沿用(测试夹具自清 temp 例外)。
 
@@ -74,7 +76,7 @@ CleanKit:  TrashServicing / CleanReport(+source) / JSONHistoryStore(仅类型扩
 ## 7. 测试策略(TDD 锚点)
 
 - **DiskKit**:squarify 性质测试(面积守恒、无重叠、纵横比上限、输入顺序稳定、退化输入);目录体量聚合正确性;`.Trash` 剪枝、symlink 不跟随、denied 子树计数;进度回调与取消。
-- **AppCore**:VM 状态机(idle→scanning→done、取消回 idle);勾选门禁(受保护/排除项不可勾、祖先链只允许最上层节点);删除编排(mock `TrashServicing` 记录调用,不真删);`CleanReport.source` 写入与旧记录解码兼容。
+- **AppCore**:VM 状态机(idle→scanning→done、取消回 idle);勾选门禁(受保护/排除项不可勾、祖先链只允许最上层节点、`containsProtected` 目录不可整目录勾选、扫描根不可勾);删除编排(mock `TrashServicing` 记录调用,不真删);清理后就地更新(节点移除、差值上溯、skipped 保持勾选、当前目录被清回退最近存活祖先);`CleanReport.source` 写入与旧记录解码兼容。
 - **守卫**:unlink/removeItem 零实现 grep;L10n 键集 en/zh 1:1;`Scripts/test.sh` 全绿;测试数只增不减。
 
 ## 8. 验收标准(Done)
@@ -82,14 +84,14 @@ CleanKit:  TrashServicing / CleanReport(+source) / JSONHistoryStore(仅类型扩
 1. 侧边栏「磁盘分析」可用(占位组移除该 case);既有三页(清理/卸载/AI)不受影响。
 2. 默认 home 扫描:进度可见、可取消;完成后 treemap + 列表双视图,可下钻/面包屑返回。
 3. 权限墙如实:denied 节点有标识并计入 skipped 口径。
-4. 删除流:默认全不勾;确认弹窗逐项;只进废纸篓;报告与历史如实(来源「磁盘分析」);受保护与排除项不可勾。
+4. 删除流:默认全不勾;确认弹窗逐项;只进废纸篓;报告与历史如实(报告页来源标注「磁盘分析」+ history.json 含 `"source":"disk-analysis"`);受保护与排除项不可勾,含受保护后代的目录不可整目录勾选。
 5. 零新依赖;`Scripts/test.sh` 全绿;L10n 1:1;CI 推送后实测绿。
 6. README(功能/路线图/已知限制)与四期 QA 清单如实更新,人工项不预标绿。
 
 ## 9. 已知限制
 
 - 无 FDA 时 `~/Library` 大量子树不可读,体量偏小且如实显示(实测 449 次拒绝)。
-- 体量口径为 `du` 语义(逻辑占用),与 Finder「可用空间」可能不一致(purgeable/快照差异)。
+- 体量口径为 `du` 同款 512 字节块占用(非 Finder「显示简介」的逻辑大小),小文件森林场景两者差异明显;未做硬链接去重。
 - treemap 为单层聚合视图,极小子树需下钻或用列表查看。
 - 大目录(如 `~/programs` 内 node_modules 森林)首次扫描为分钟级,进度与取消是缓解而非消除。
 - 外置卷、`~/.Trash` 不在本期范围。
