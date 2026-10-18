@@ -151,7 +151,8 @@ diff <(grep -o '^"[^"]*"' Sources/Raccoon/Resources/zh-Hans.lproj/Localizable.st
 
 ### A11. 运行中 Cursor 清其日志 → skipped 如实 — ⏳ 待人工
 
-- 步骤:启动 Cursor 并正常使用片刻(制造日志与热缓存)→ AI 页扫描 → 勾选 Cursor 组条目(其日志由 `ai.cursor` 的 `logs` include 覆盖,`User`/`AgentStores` 已 exclude)→ 清理。
+- 步骤:启动 Cursor 并正常使用片刻(制造日志与热缓存)→ AI 页扫描 → 勾选 Cursor 组条目(其日志由 `ai.cursor` 的 `logs` include 覆盖,`User`/`AgentStores` 已 exclude)。
+- **可复现跳过法**(不依赖真实文件锁时机,同二期 M2 思路):清理前执行 `chflags uchg ~/Library/Application\ Support/Cursor/logs`(或对 logs 下任一子项)制造确定性的文件锁 → 再点清理;验证后恢复 `chflags nouchg`。注意:若对整个 logs 目录加锁,确认弹窗后的清理会命中 skipped;**完成后务必解锁**,残留锁会影响 Cursor 后续写日志。
 - 预期:被文件锁占用的条目进 skipped,报告如实列出;未锁定条目正常进废纸篓;运行中标识与默认不勾行为正常;跳过项留在结果中可重试。
 - 自动半段:运行中项默认不勾有 AI 类夹具(`ScanViewModelTests.swift:355`)、skipped 收敛有 VM 级测试;真实文件锁与运行中标记为视觉/系统行为,必须人工。
 

@@ -34,7 +34,7 @@ macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 
 
 配套保障:规则根作用域白名单(必须位于用户主目录内,唯一例外是 `/Applications` 下的 macOS 安装器)、符号链接解析前后双形态校验(别名指进保护根或逃出主目录均整条拒绝)、单条规则校验失败仅拒绝该条并记录,绝不静默放行。
 
-已知限制:`~/Library/Preferences` 与 `~/Library/Cookies` 因一期硬保护整棵覆盖,二期不列出;系统级 `/Library` 残留与任何提权操作继续顺延。三期(AI 清理)已知限制:
+已知限制:`~/Library/Preferences` 与 `~/Library/Cookies` 因一期硬保护整棵覆盖,至今各入口均不列出;系统级 `/Library` 残留与任何提权操作继续顺延。三期(AI 清理)已知限制:
 
 - 仅覆盖规则表所列工具(Claude、Claude Code、Cursor、Codex、Ollama、HuggingFace、ChatGPT);VS Code Copilot、Windsurf、Zed、LM Studio 等后续按需加规则即扩,本期不含
 - 大体积用户数据(会话、技能、agent 工作数据)**有意不列出**;想回收 `~/.claude/skills`、`Cursor/User` 等空间需用户自行处理
