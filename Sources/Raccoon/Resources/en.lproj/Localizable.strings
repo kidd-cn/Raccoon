@@ -118,4 +118,4 @@
 "disk.empty" = "Nothing to display";
 "disk.rescan" = "Rescan";
 "report.source.diskAnalysis" = "Disk Analysis";
-"disk.confirm.hint" = "Protected paths are never listed or selected. Cleanup only moves files to the Trash.";
+"disk.confirm.hint" = "Protected paths are never selected. Cleanup only moves files to the Trash.";

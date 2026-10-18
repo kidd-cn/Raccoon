@@ -118,4 +118,4 @@
 "disk.empty" = "没有可显示的内容";
 "disk.rescan" = "重新扫描";
 "report.source.diskAnalysis" = "磁盘分析";
-"disk.confirm.hint" = "受保护路径永不列出、永不勾选。清理只会把文件移入废纸篓。";
+"disk.confirm.hint" = "受保护路径永不可勾选。清理只会移入废纸篓。";
