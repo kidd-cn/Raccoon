@@ -5,39 +5,38 @@
 > - **✅ 自动核验**:证据为真实运行的命令输出、测试名与文件位置,或明确标注的代码锚点;不包含任何 GUI 目测结论。
 > - **⏳ 待人工**:需 GUI 交互或人眼判断,附操作步骤与预期,一律未预标绿。
 >
-> **实测基线(2026-10-18,分支 `feat/phase5`,代码态 `d9d022d`;其后 `f2d080c` 为纯文档提交,无代码变更,基线依旧成立)**:
+> **实测基线(2026-10-18,分支 `feat/phase5`,代码态 `075c7fc`;此前 `d9d022d` 为终审基线,`075c7fc` 为其后三条低危残留修复,文档数字已按 `075c7fc` 实测更新)**:
 >
-> - `Scripts/test.sh` 全量 **298/298 绿**(四期基线 231 → 五期 298,只增不减,净增 67)。
+> - `Scripts/test.sh` 全量 **300/300 绿**(四期基线 231 → 五期 300,只增不减,净增 69)。
 > - 中英 L10n 各 **167** 键,键集 diff 为空(167:167 1:1)。
-> - 终验安全 grep 符合期望:全仓零 unlink/removeItem 实现,唯一删除实现仍为 `TrashService.swift:21` 的 `FileManager.trashItem`;五期代码 diff(a881c4b..d9d022d)零新增 `removeItem`/`unlink`/`Process(` 调用。
+> - 终验安全 grep 符合期望:全仓零 unlink/removeItem 实现,唯一删除实现仍为 `TrashService.swift:21` 的 `FileManager.trashItem`;五期代码 diff(a881c4b..075c7fc)零新增 `removeItem`/`unlink`/`Process(` 调用。
 > - 本文档所有「✅」均以该次实测为准;命令输出逐条留存原文,无编造。
 >
-> **数值可复现性说明**:本文档中的字节数、百分比、耗时均为当次运行值,会随机型、系统负载、卷状态与电池状态变化;可复现的是测试计数(298)、exit code、L10n 键数与构建成功与否,不是具体数值。
+> **数值可复现性说明**:本文档中的字节数、百分比、耗时均为当次运行值,会随机型、系统负载、卷状态与电池状态变化;可复现的是测试计数(300)、exit code、L10n 键数与构建成功与否,不是具体数值。
 
 ## 一、✅ 自动核验项(6 项)
 
-### 1. 全量测试 298/298 绿 — ✅
+### 1. 全量测试 300/300 绿 — ✅
 
 ```text
-$ Scripts/test.sh > /tmp/phase5-full-test.log 2>&1; echo EXIT=$?
-EXIT=0
+$ Scripts/test.sh 2>&1 | grep -E "Test run with|error:"
 ```
 
-`/tmp/phase5-full-test.log` 中 7 组结果行原文:
+7 组结果行原文(执行于 `075c7fc`):
 
 ```text
-✔ Test run with 66 tests in 6 suites passed after 0.059 seconds.
-✔ Test run with 48 tests in 4 suites passed after 0.102 seconds.
+✔ Test run with 66 tests in 6 suites passed after 0.055 seconds.
+✔ Test run with 48 tests in 4 suites passed after 0.100 seconds.
 ✔ Test run with 32 tests in 6 suites passed after 0.001 seconds.
-✔ Test run with 19 tests in 3 suites passed after 0.002 seconds.
-✔ Test run with 14 tests in 2 suites passed after 0.202 seconds.
-✔ Test run with 29 tests in 8 suites passed after 0.093 seconds.
-✔ Test run with 90 tests in 9 suites passed after 0.769 seconds.
+✔ Test run with 20 tests in 3 suites passed after 0.002 seconds.
+✔ Test run with 14 tests in 2 suites passed after 0.201 seconds.
+✔ Test run with 29 tests in 8 suites passed after 0.092 seconds.
+✔ Test run with 91 tests in 9 suites passed after 0.900 seconds.
 ```
 
-合计 66 + 48 + 32 + 19 + 14 + 29 + 90 = **298**,exit 0,无 skip、无 fail。
+合计 66 + 48 + 32 + 20 + 14 + 29 + 91 = **300**,exit 0,无 skip、无 fail。
 
-> 注:每行末尾的秒级计时为当次运行值,因机而异、不可精确复现;测试计数(298)与 exit(0)可复现。
+> 注:每行末尾的秒级计时为当次运行值,因机而异、不可精确复现;测试计数(300)与 exit(0)可复现。
 
 ### 2. 删除红线 grep:零 unlink/removeItem 实现,唯一 trashItem 实现,五期零新增危险调用 — ✅
 
@@ -94,7 +93,10 @@ Build complete! (2.94秒)
 ### 6. 本分支五期提交序列 — ✅
 
 ```text
-$ git log --oneline d86d5e8^..d9d022d
+$ git log --oneline d86d5e8^..075c7fc
+075c7fc fix: CPU 不可用态与启动项确认死路等终审残留
+ea6b200 docs: QA 清单基线注记与页脚实际文案对齐
+f2d080c docs: 五期收尾——README、QA 清单、规格状态
 d9d022d fix(ui): 确认按钮双击守卫与首载空态
 ea5c0d8 fix(ui): 启动项页排除入口与禁用并发/报告时序修复
 de7c20c feat(ui): 启动项管理页(确认流、保护门置灰、排除、双语)
@@ -208,4 +210,4 @@ d86d5e8 docs: 五期设计稿——状态监控+系统优化(MonitorKit/LaunchKi
 - **✅ 自动核验:6 项**(全量测试、删除红线 grep、工具链、L10n、swift build、提交序列)。
 - **⏳ 待人工:15 项**(A1–A15),每项均为 `- [ ]` 未勾选,给出操作步骤与预期,无一预标绿。
 
-**结论**:工程侧自动可核验面全部为绿(298/298、L10n 167:167、安全 grep 符合期望、swift build 通过);五期功能与交互的人工验收尚未执行,本文档不宣称任何未真机验证项为「满足」。
+**结论**:工程侧自动可核验面全部为绿(300/300、L10n 167:167、安全 grep 符合期望、swift build 通过);五期功能与交互的人工验收尚未执行,本文档不宣称任何未真机验证项为「满足」。
