@@ -38,7 +38,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "Raccoon",
-            dependencies: ["AppCore", "ScanKit", "CleanKit", "UninstallKit", "DiskKit", "MonitorKit", "LaunchKit"],
+            dependencies: ["AppCore", "ScanKit", "CleanKit", "UninstallKit", "DiskKit", "MonitorKit", "MenuBarKit", "LaunchKit"],
             resources: [.process("Resources")]
         ),
         .testTarget(name: "CleanKitTests", dependencies: ["CleanKit"]),
