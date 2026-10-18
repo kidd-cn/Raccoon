@@ -68,15 +68,15 @@ MonitorKit (五期)     VolumeInfo / MemoryStats / CPULoad / BatteryInfo / Netwo
   - 网络 → 在线时按接口显示,离线显示离线态
   - formatter 返回 `MenuBarLabel`(`Equatable` 枚举):`.percent(Int)`、`.network(NetworkStatus?)`、`.none`;具体符号(如 `Wi-Fi`/`LAN`/`Offline`)由视图层本地化,保证纯函数稳定可测
 - **`MenuBarPreferences`**:`{metric, iconStyle, launchAtLogin, notificationsEnabled, memoryThreshold}`;默认 `.disk` / `.iconAndValue` / false / false / 0.85;`memoryThreshold` 限制 0.70...0.95
-- **`MenuBarPreferenceStore`** 协议:`load() -> MenuBarPreferences`、`save(_:)`;`UserDefaultsPreferenceStore` 薄壳(键前缀 `menubar.`)
+- **`MenuBarPreferenceStore`** 协议:`load() -> MenuBarPreferences`、`save(_:)`、`loadLastNotified() -> [NotificationKind: Date]`、`saveLastNotified(_:)`;`UserDefaultsPreferenceStore` 薄壳(键前缀 `menubar.`)。冷却时间戳持久化,应用重启后 6h 内不重复打扰
 - **`NotificationKind`**:`.lowDisk`、`.highMemory`
 - **`NotificationPolicy.evaluate(snapshot:preferences:lastNotified:now:) -> [NotificationKind]`**:
   - 低磁盘:取系统盘;无系统盘标记时取可用比例最低的卷。可用比例 `< 0.10` **或** 可用字节 `< 10_737_418_240`(严格小于,与五期建议引擎同阈值)
   - 高内存:已用比例 `>= preferences.memoryThreshold`
   - 冷却:同类距上次通知 `< 21_600s`(6h)不再触发;返回按 `.lowDisk → .highMemory` 固定顺序
   - 通知总开关关闭 → 恒返回 `[]`
-- **`LoginItemStatus`**:`.disabled`、`.enabled`、`.requiresApproval`、`.unavailable`;`LoginItemManaging` 协议:`status`、`setEnabled(_:) throws`
-- **`Notifying`** 协议:`requestAuthorization() async -> Bool`、`post(_ kind: NotificationKind) async`
+- **`LoginItemStatus`**:`.disabled`、`.enabled`、`.requiresApproval`、`.unavailable`;`LoginItemManaging` 协议:`status`、`setEnabled(_:) throws`、`openSystemSettings()`
+- **`Notifying`** 协议:`requestAuthorization() async -> Bool`、`post(_ kind: NotificationKind) async`;具体文案由 App 层壳本地化,协议保持语言无关
 
 ### 5.2 ViewModel(AppCore)
 
@@ -88,7 +88,9 @@ MonitorKit (五期)     VolumeInfo / MemoryStats / CPULoad / BatteryInfo / Netwo
 - `stop()`:取消两个循环;预留给未来「完全退出」路径
 - `refreshNow()`:立即全量采样一次(面板打开时调用)
 - `setMetric(_:)` / `setIconStyle(_:)`:`preferences` 持久化并即时刷新 `label`
+- `setMemoryThreshold(_:)`:clamp 到 0.70...0.95 并持久化
 - `setLaunchAtLogin(_:)`:经 `LoginItemManaging` 设置,成功后刷新 `loginStatus`;`requiresApproval` 不视为失败
+- `openLoginItemSystemSettings()`:转调系统设置登录项页(需批准状态引导)
 - `setNotificationsEnabled(_:)`:开启时请求授权;拒绝则保持 false 并记录状态
 - 慢循环额外执行 `NotificationPolicy`:命中则 `post`,并更新内存中的 `lastNotified`(以 `Date` 注入可测)
 - 单个采集器返回 nil → 该字段为 nil,不影响其他指标;`label` 回退 `—`
@@ -102,13 +104,13 @@ MonitorKit (五期)     VolumeInfo / MemoryStats / CPULoad / BatteryInfo / Netwo
   2. 磁盘卡(可用/总量 + 条形)、内存卡(已用/总量 + 压缩/联动/可清除)、CPU 卡(百分比 + `SparklineView`)、电池卡、网络卡(含接口类型)
   3. 底部快捷入口:主窗口(打开/激活)、清理、卸载、AI 清理、磁盘分析、启动项管理、设置、退出
   4. 面板出现时 `refreshNow()`;无数据时显示「暂不可用」占位而非裸 key
-- **`NavigationModel`**:`@MainActor @Observable`,`selection: Module`;`RootView` 改用它;菜单栏入口设置 selection 后 `NSApp.activate` + 打开主窗口(`openWindow` 或 AppKit 激活)
+- **`NavigationModel`**:`@MainActor @Observable`,`selection: Module` + `openLaunchItems: Bool`;`RootView` 与 `MonitorHomeView` 共用;菜单栏入口设置目标后 `NSApp.activate` + 打开主窗口(`openWindow` 或 AppKit 激活)
 - **`SettingsView`** 新增「菜单栏」tab:`MenuBarSettingsPane`(指标、图标样式、自启开关+状态说明、通知开关+内存阈值 `Stepper` 70–95%)。通知被系统拒绝时显示引导文案
 - 全部 en/zh key 1:1(预计 +28~34 key),zh 值全角标点;深浅色 + 无障碍标签沿既有模式
 
 ### 5.4 通知薄壳
 
-- `UNUserNotificationCenterNotifier`:请求授权;`post` 构造标题/正文(本地化在 App 层完成,壳只接收已本地化文案);投递为即时 `UNNotificationRequest`
+- `UNUserNotificationCenterNotifier`(位于 App 层):请求授权;`post(kind)` 用 L10n 构造标题/正文后投递即时 `UNNotificationRequest`
 - 应用在前台时通过 `UNUserNotificationCenterDelegate` 仍展示横幅(否则前台默认不弹)
 - 通知内容不包含路径等敏感信息:低磁盘只报可用空间,高内存只报占用比例
 
