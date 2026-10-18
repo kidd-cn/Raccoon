@@ -33,17 +33,23 @@ public final class ScanViewModel {
     // 废纸篓服务可注入:生产用默认真实服务;测试注入 Mock,保证测试绝不触碰真实文件系统
     // (否则硬编码真实服务会对不存在的 /a 真调 trashItem → .vanished → trashedCount 断言必红)
     public let trash: TrashServicing
+    // 类别过滤:主清理页 = 全集去 .ai,AI 页 = [.ai];nil = 不过滤(测试与回归用)。
+    // 两页共用同一引擎,凭此参数互不相混——AI 条目与 AI 类别卡片在主页面绝口不提,反之亦然;
+    // Task 5 接线两页(接线落地前 RootView 仍传 nil)。
+    public let categoryFilter: Set<RuleCategory>?
 
     // 供测试等待(内部可见)
     var task: Task<Void, Never>?
     var cleanTask: Task<Void, Never>?
 
     public init(service: ScanServicing, exclusions: ExclusionsStore, history: HistoryStoring,
-                trash: TrashServicing = FileManagerTrashService()) {
+                trash: TrashServicing = FileManagerTrashService(),
+                categoryFilter: Set<RuleCategory>? = nil) {
         self.service = service
         self.exclusions = exclusions
         self.history = history
         self.trash = trash
+        self.categoryFilter = categoryFilter
     }
 
     public func startScan() {
@@ -60,8 +66,11 @@ public final class ScanViewModel {
             let result = try await service.scan(exclusions: exclusions.exclusions) { [weak self] p in
                 Task { @MainActor [weak self] in self?.progress = p }
             }
-            hits = result.hits.sorted { $0.sizeBytes > $1.sizeBytes }
-            summaries = result.summaries
+            // 按页过滤后重算汇总而非截 result.summaries:与 applyCleanOutcome 的重算同源同口径
+            // (CategorySummary.aggregate);filter 为 nil 时与引擎输出等价。
+            let filtered = categoryFilter.map { f in result.hits.filter { f.contains($0.category) } } ?? result.hits
+            hits = filtered.sorted { $0.sizeBytes > $1.sizeBytes }
+            summaries = CategorySummary.aggregate(hits)
             permissionSkippedCount = result.permissionSkippedCount
             truncatedRuleIDs = result.truncatedRuleIDs
             excludedCount = result.excludedCount

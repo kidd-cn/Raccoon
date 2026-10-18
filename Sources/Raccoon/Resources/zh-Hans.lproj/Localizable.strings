@@ -24,6 +24,7 @@
 "category.system" = "系统垃圾";
 "category.dev" = "开发工具缓存";
 "category.apps" = "应用缓存";
+"category.ai" = "AI 工具";
 "category.cautious" = "谨慎清理";
 "category.items" = "%d 项";
 "detail.title" = "清理明细";
@@ -92,3 +93,13 @@
 "orphans.clean.do" = "清理并移入废纸篓";
 "orphans.confirm.title" = "确认清理残留";
 "orphans.defaultUncheckedHint" = "未确认归属的项默认不勾选，请确认后再选择";
+"ai.startHint" = "扫描 AI 工具的缓存、日志与可重新下载的运行时、模型缓存。\n会话记录、用户技能等个人数据永不列出。";
+"ai.empty" = "未发现 AI 工具的可再生内容";
+"ai.tool.claude-desktop" = "Claude 桌面版";
+"ai.tool.claude-code" = "Claude Code";
+"ai.tool.cursor" = "Cursor";
+"ai.tool.codex" = "Codex";
+"ai.tool.ollama" = "Ollama";
+"ai.tool.huggingface" = "Hugging Face";
+"ai.tool.chatgpt" = "ChatGPT";
+"ai.tool.other" = "其他";

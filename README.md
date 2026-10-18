@@ -8,9 +8,9 @@ macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 
 - **中英双语**:简体中文 / English,跟随系统语言
 - **核心价值主张:安全**。文件删除只进废纸篓;本地快照经系统 `tmutil` 回收(见谨慎项)、默认只勾选可再生内容、多层保护机制兜底
 
-## 当前功能(一期 + 二期)
+## 当前功能(一期 + 二期 + 三期)
 
-- **四类规则扫描**:系统垃圾 / 开发工具缓存 / 应用缓存 / 谨慎清理项,内置 27 条声明式规则(`rules.json`)
+- **五类规则扫描**:系统垃圾 / 开发工具缓存 / 应用缓存 / 谨慎清理项 / AI 工具,内置 43 条声明式规则(`rules.json`);AI 类规则只在「AI 清理」入口出现,主清理页绝不显示
 - **实时扫描进度**:逐规则进度反馈,已发现条数与字节量实时跳动,可随时取消(取消即丢弃本轮结果)
 - **分类卡片与明细**:按类别汇总大小/项数;明细列表按大小降序,含应用图标、路径、大小、状态标签
 - **勾选与清理流**:全选/全不选/取消谨慎项;底部常驻「已选 N 项 · X GB」;确认弹窗(cautious 项单独分区、运行中应用黄色警告)→「移入废纸篓」→ 完成报告(释放量、成功/跳过计数与原因);报告页可「返回列表」继续处理剩余项(已清理项离开列表,未清理项保留,无需重扫)
@@ -19,6 +19,7 @@ macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 
 - **清理历史**:记录于 `~/Library/Application Support/Raccoon/history.json`,主页回显「上次清理释放 X」
 - **应用卸载**:应用本体与关联数据一起预览,默认只勾精确归属的可再生数据;本体固定包含,运行中应用有黄色提示
 - **孤儿残留**:扫描已卸载应用留在 `~/Library` 已知位置的数据,按高置信/未确认归属分组;未确认项默认不勾选
+- **AI 清理**:侧边栏独立入口,扫描 AI 工具(Claude / Claude Code / Cursor / Codex / Ollama / HuggingFace / ChatGPT)的可再生内容——缓存、日志、可重新下载的运行时与模型缓存;结果按工具分组、组内大小降序;只列可再生内容,会话/技能等个人数据永不列出;模型与运行时属谨慎项(默认不勾、单独确认)
 
 ## 安全设计:四道门
 
@@ -33,7 +34,13 @@ macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 
 
 配套保障:规则根作用域白名单(必须位于用户主目录内,唯一例外是 `/Applications` 下的 macOS 安装器)、符号链接解析前后双形态校验(别名指进保护根或逃出主目录均整条拒绝)、单条规则校验失败仅拒绝该条并记录,绝不静默放行。
 
-已知限制:`~/Library/Preferences` 与 `~/Library/Cookies` 因一期硬保护整棵覆盖,二期不列出;系统级 `/Library` 残留与任何提权操作留待三期。
+已知限制:`~/Library/Preferences` 与 `~/Library/Cookies` 因一期硬保护整棵覆盖,至今各入口均不列出;系统级 `/Library` 残留与任何提权操作继续顺延。三期(AI 清理)已知限制:
+
+- 仅覆盖规则表所列工具(Claude、Claude Code、Cursor、Codex、Ollama、HuggingFace、ChatGPT);VS Code Copilot、Windsurf、Zed、LM Studio 等后续按需加规则即扩,本期不含
+- 大体积用户数据(会话、技能、agent 工作数据)**有意不列出**;想回收 `~/.claude/skills`、`Cursor/User` 等空间需用户自行处理
+- `ai.chatgpt-cache` 为标准路径,未在本机实测,缺失即零命中(无害)
+- 运行中工具的缓存项可能因文件锁被跳过,按 skipped 如实报告
+- `anysphere.cursor-agent-worker`(3.0G)无法确证可再生,本期不列;后续若确证可再评估
 
 ## 构建与运行
 
@@ -41,7 +48,7 @@ macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 
 
 ```bash
 swift build            # 构建
-Scripts/test.sh        # 全量测试(183 用例)——唯一合法测试入口,勿直接 swift test
+Scripts/test.sh        # 全量测试(199 用例)——唯一合法测试入口,勿直接 swift test
 swift run              # 运行应用(开发模式)
 Scripts/bundle-app.sh  # 组装 Raccoon.app(adhoc 签名,输出到 build/)
 ```
@@ -78,7 +85,8 @@ CI:GitHub Actions(`macos-latest`)跑 `swift build` + `Scripts/test.sh` + L10n �
 | 字段            | 必填    | 说明                                         |
 | ------------- | ----- | ------------------------------------------ |
 | `id`          | 是     | 全局唯一,重复即整条拒绝                               |
-| `category`    | 是     | `system` / `dev` / `apps` / `cautious`     |
+| `category`    | 是     | `system` / `dev` / `apps` / `cautious` / `ai` |
+| `tool`        | 否     | 工具标识;`category = ai` 时必填且非空(AI 清理页按它分组),由内置规则测试 `aiRulesHaveNonEmptyTool` 强制 |
 | `safety`      | 是     | `safe`(默认勾选)/ `cautious`(默认不勾选、单独确认)       |
 | `action`      | 否     | `trash`(默认)或 `tmutil-thin`(本地快照专用)         |
 | `path`        | 是     | 支持 `~` 展开;必须是具体目录,根不支持 glob                |
@@ -86,7 +94,7 @@ CI:GitHub Actions(`macos-latest`)跑 `swift build` + `Scripts/test.sh` + L10n �
 | `exclude`     | 否     | 相对 glob 排除                                 |
 | `description` | 否(推荐) | `zh-Hans` 与 `en` 双语说明,删了什么、有什么后果           |
 
-内置规则由测试强制双语——`bundledRulesCoverAllCategoriesAndHaveLocalizedDescriptions` 要求每条含 `zh-Hans` 与 `en` description,PR 缺失会挂测试;提交前跑 `Scripts/test.sh` 确认。
+内置规则由测试强制双语——`bundledRulesCoverAllCategoriesAndHaveLocalizedDescriptions` 要求每条含 `zh-Hans` 与 `en` description,PR 缺失会挂测试;提交前跑 `Scripts/test.sh` 确认。`tool` 字段另有三道内置规则测试门:`aiRulesHaveNonEmptyTool`(`category=ai` 必带非空 `tool`)、`aiRuleToolsAreKnownValues`(取值须在已知白名单内,新工具须先补 `canonicalOrder` 与 `ai.tool.*` 双语键)、`noRuleToolUsesReservedOtherId`(`other` 为「其他」组保留 id)。
 
 ### 校验规则(加载时逐条执行,以 `Sources/ScanKit/RuleStore.swift` 为准)
 
@@ -107,7 +115,7 @@ CI:GitHub Actions(`macos-latest`)跑 `swift build` + `Scripts/test.sh` + L10n �
 | -- | ------------------------------- | ---- |
 | 一期 | 应用骨架 + 核心清理                     | ✅ 完成 |
 | 二期 | 应用卸载 + 残留清理                     | ✅ 已实现(待人工 QA) |
-| 三期 | AI 工具清理(Claude/Cursor/Ollama 等) | 规划   |
+| 三期 | AI 工具清理(Claude/Cursor/Ollama 等) | ✅ 已实现(待人工 QA) |
 | 四期 | 磁盘分析(treemap)                   | 规划   |
 | 五期 | 状态监控 + 系统优化                     | 规划   |
 | 六期 | 菜单栏工具集                          | 规划   |

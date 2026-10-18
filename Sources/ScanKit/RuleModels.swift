@@ -1,7 +1,7 @@
 import Foundation
 
 public enum RuleCategory: String, Codable, Sendable, CaseIterable, Identifiable {
-    case system, dev, apps, cautious
+    case system, dev, apps, ai, cautious
     public var id: String { rawValue }
 }
 
@@ -33,6 +33,8 @@ public struct CleanupRule: Codable, Equatable, Sendable, Identifiable {
     public let exclude: [String]?
     public let action: RuleAction?
     public let description: LocalizedText?
+    /// 归属工具标识(如 "claude-desktop"),AI 清理页按它分组;非 AI 规则留 nil。
+    public let tool: String?
 
     public var effectiveAction: RuleAction { action ?? .trash }
 }

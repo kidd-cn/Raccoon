@@ -16,18 +16,20 @@ final class ScanViewModelTests {
         try? FileManager.default.removeItem(at: dir)
     }
 
-    func makeVM(service: ScanServicing, trash: TrashServicing) -> ScanViewModel {
+    func makeVM(service: ScanServicing, trash: TrashServicing,
+                categoryFilter: Set<RuleCategory>? = nil) -> ScanViewModel {
         ScanViewModel(service: service,
                       exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: "vm-\(UUID().uuidString)")!),
                       history: JSONHistoryStore(directory: dir),
-                      trash: trash)
+                      trash: trash, categoryFilter: categoryFilter)
     }
 
     func hit(_ path: String, _ size: Int64, safety: SafetyLevel = .safe,
-             running: Bool = false, category: RuleCategory = .system) -> ScanHit {
+             running: Bool = false, category: RuleCategory = .system,
+             tool: String? = nil) -> ScanHit {
         ScanHit(ruleID: "r", category: category, safety: safety, path: path, sizeBytes: size,
                 isDirectory: false, bundleID: nil, appName: nil, isAppRunning: running,
-                action: .trash, snapshotDate: nil)
+                action: .trash, snapshotDate: nil, tool: tool)
     }
 
     @Test func testScanFlow_stateMachineAndDefaultSelection() async {
@@ -298,6 +300,83 @@ final class ScanViewModelTests {
         #expect(vm.cleanProgress.total == 2)
         await vm.cleanTask?.value
         #expect(vm.cleanProgress == CleanProgress(done: 2, total: 2))
+    }
+
+    // —— 三期:categoryFilter(spec §4/D3)——
+
+    @Test func categoryFilter_aiPageShowsOnlyAI() async {
+        let svc = FakeScanService(result: .init(
+            hits: [hit("/ai1", 100, category: .ai), hit("/sys", 400, category: .system)],
+            summaries: [.init(category: .ai, totalBytes: 100, hitCount: 1),
+                        .init(category: .system, totalBytes: 400, hitCount: 1)],
+            permissionSkippedCount: 0, truncatedRuleIDs: [], excludedCount: 0))
+        let vm = makeVM(service: svc, trash: MockTrash(outcome: .trashed), categoryFilter: [.ai])
+        vm.startScan()
+        await vm.task?.value
+        #expect(vm.hits.map(\.path) == ["/ai1"])
+        #expect(vm.summaries == [.init(category: .ai, totalBytes: 100, hitCount: 1)])
+    }
+
+    @Test func categoryFilter_mainPageExcludesAI() async {
+        // 主清理页过滤 = 全集去 .ai(D3):AI 条目与 AI 类别卡片在主页面绝口不提
+        let svc = FakeScanService(result: .init(
+            hits: [hit("/ai1", 100, category: .ai), hit("/sys", 400)],
+            summaries: [.init(category: .ai, totalBytes: 100, hitCount: 1),
+                        .init(category: .system, totalBytes: 400, hitCount: 1)],
+            permissionSkippedCount: 0, truncatedRuleIDs: [], excludedCount: 0))
+        let main: Set<RuleCategory> = Set(RuleCategory.allCases).subtracting([.ai])
+        let vm = makeVM(service: svc, trash: MockTrash(outcome: .trashed), categoryFilter: main)
+        vm.startScan()
+        await vm.task?.value
+        #expect(vm.hits.map(\.path) == ["/sys"])
+        #expect(vm.summaries.map(\.category) == [.system])
+    }
+
+    @Test func categoryFilter_nilShowsAll() async {
+        // 回归:nil = 旧行为
+        let svc = FakeScanService(result: .init(
+            hits: [hit("/ai1", 100, category: .ai), hit("/sys", 400)],
+            summaries: [.init(category: .ai, totalBytes: 100, hitCount: 1),
+                        .init(category: .system, totalBytes: 400, hitCount: 1)],
+            permissionSkippedCount: 0, truncatedRuleIDs: [], excludedCount: 0))
+        let vm = makeVM(service: svc, trash: MockTrash(outcome: .trashed))
+        vm.startScan()
+        await vm.task?.value
+        #expect(Set(vm.hits.map(\.path)) == ["/ai1", "/sys"])
+    }
+
+    // 三期端到端(spec §8):AI 页全流程——过滤扫描 → safe 默认勾/cautious 与运行中不默认勾 →
+    // 清理 → 被锁跳过项如实进报告并保留(Review Focus #1)
+    @Test func aiPage_endToEnd_scanSelectCleanReport() async throws {
+        let trash = MockTrash(outcome: .trashed, skippedFor: ["/ai/blocked"])
+        let vm = makeVM(service: FakeScanService(result: .init(
+            hits: [hit("/ai/cache", 100, category: .ai, tool: "cursor"),
+                   hit("/ai/models", 200, safety: .cautious, category: .ai, tool: "ollama"),
+                   hit("/ai/blocked", 50, running: true, category: .ai),
+                   hit("/sys/other", 400)],
+            summaries: [], permissionSkippedCount: 0, truncatedRuleIDs: [], excludedCount: 0)),
+            trash: trash, categoryFilter: [.ai])
+        vm.startScan()
+        await vm.task?.value
+        #expect(vm.hits.map(\.path).sorted() == ["/ai/blocked", "/ai/cache", "/ai/models"])
+        // 默认只勾 safe 且未运行
+        #expect(vm.selectedPaths == ["/ai/cache"])
+
+        // 运行中被锁项须随清理一并提交,才能验「跳过→如实进报告→仍勾选可重试」全链路
+        vm.toggle("/ai/models")
+        vm.toggle("/ai/blocked")
+        vm.cleanSelected()
+        await vm.cleanTask?.value
+
+        let calls = await trash.calls
+        #expect(calls.sorted() == ["/ai/blocked", "/ai/cache", "/ai/models"])   // /sys/other 绝不提交
+        guard case .report(let report) = vm.phase else { Issue.record("应为 report"); return }
+        #expect(report.freedBytes == 300)            // 仅成功入废纸篓的 100+200
+        #expect(report.skipped.map(\.path) == ["/ai/blocked"])
+        // 收敛:skipped 仍在列表、仍勾选可重试;已清项离场
+        #expect(vm.hits.map(\.path) == ["/ai/blocked"])
+        #expect(vm.selectedPaths.contains("/ai/blocked"))
+        #expect(try vm.history.loadAll().count == 1)
     }
 }
 

@@ -14,11 +14,13 @@ public struct ScanHit: Identifiable, Equatable, Sendable {
     public let isAppRunning: Bool
     public let action: RuleAction
     public let snapshotDate: String?
+    /// 归属工具标识(继承自 rule.tool),AI 清理页按它分组;非 AI 规则的命中为 nil。
+    public let tool: String?
 
     public init(ruleID: String, category: RuleCategory, safety: SafetyLevel, path: String,
                 sizeBytes: Int64, isDirectory: Bool = false, bundleID: String? = nil,
                 appName: String? = nil, isAppRunning: Bool = false,
-                action: RuleAction = .trash, snapshotDate: String? = nil) {
+                action: RuleAction = .trash, snapshotDate: String? = nil, tool: String? = nil) {
         self.ruleID = ruleID
         self.category = category
         self.safety = safety
@@ -30,6 +32,7 @@ public struct ScanHit: Identifiable, Equatable, Sendable {
         self.isAppRunning = isAppRunning
         self.action = action
         self.snapshotDate = snapshotDate
+        self.tool = tool
     }
 
     public var cleanItem: CleanItem {
