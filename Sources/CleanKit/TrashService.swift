@@ -92,7 +92,8 @@ public struct CleanExecutor: Sendable {
     }
 
     /// 逐项执行;任何单项失败不中断整批。
-    public func clean(_ items: [CleanItem], onProgress: (@Sendable (Int, Int) -> Void)? = nil) async -> CleanReport {
+    public func clean(_ items: [CleanItem], onProgress: (@Sendable (Int, Int) -> Void)? = nil,
+                      source: String? = nil) async -> CleanReport {
         var freed: Int64 = 0, trashed = 0, vanished = 0, snapshotCount = 0
         var skipped: [SkippedItem] = []
         for (i, item) in items.enumerated() {
@@ -122,6 +123,6 @@ public struct CleanExecutor: Sendable {
             onProgress?(i + 1, items.count)
         }
         return CleanReport(freedBytes: freed, trashedCount: trashed, vanishedCount: vanished,
-                           snapshotCount: snapshotCount, skipped: skipped)
+                           snapshotCount: snapshotCount, skipped: skipped, source: source)
     }
 }

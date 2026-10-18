@@ -176,6 +176,62 @@ public final class DiskAnalysisViewModel {
         lastCleanup = (try? history.loadAll())?.max { $0.date < $1.date }
     }
 
+    // MARK: - 清理编排
+
+    /// 以 selectedNodes(最上层)构造清理项,经 CleanExecutor 逐项进废纸篓;完成后就地更新树并写入历史。
+    public func cleanSelected() {
+        guard phase == .completed, root != nil else { return }
+        let items = selectedNodes.map { CleanItem(path: $0.path, sizeBytes: $0.sizeBytes, action: .trash) }
+        guard !items.isEmpty else { return }
+        phase = .cleaning
+        cleanProgress = CleanProgress(done: 0, total: items.count)
+        // 与卸载页同构:清理时取扫描器同款保护层,删除引擎仍做最后一道 isDenied 兜底。
+        let executor = CleanExecutor(trash: trash, protection: scanner.protection)
+        task = Task { [weak self] in
+            await self?.runClean(items: items, executor: executor)
+        }
+    }
+
+    private func runClean(items: [CleanItem], executor: CleanExecutor) async {
+        let report = await executor.clean(items, onProgress: { [weak self] done, total in
+            Task { @MainActor [weak self] in
+                self?.cleanProgress = CleanProgress(done: done, total: total)
+            }
+        }, source: "disk-analysis")
+        applyCleanOutcome(report, submitted: items)
+        try? history.append(report)
+        lastCleanup = report
+        phase = .report(report)
+    }
+
+    /// 清理后就地更新树:trashed/vanished(非 skipped)节点移除、体量差值上溯全部祖先;
+    /// skipped 节点保留且保持勾选;selectedPaths 收敛到存活节点。
+    private func applyCleanOutcome(_ report: CleanReport, submitted: [CleanItem]) {
+        let gone = Set(submitted.map(\.path)).subtracting(report.skipped.map(\.path))
+        if let current = root {
+            root = removeGone(from: current, gone: gone)
+        }
+        if let newRoot = root {
+            selectedPaths = selectedPaths.filter { findNode($0, in: newRoot) != nil }
+        } else {
+            selectedPaths = []
+        }
+    }
+
+    /// 从报告页回到结果页,保留更新后的树。
+    public func returnToResults() {
+        guard case .report = phase else { return }
+        pruneDrillPath()
+        phase = .completed
+    }
+
+    /// 关闭报告,同样回到结果页;若当前下钻末节点已被删除,回退到最近的存活祖先。
+    public func dismissReport() {
+        guard case .report = phase else { return }
+        pruneDrillPath()
+        phase = .completed
+    }
+
     // MARK: - 私有帮手
 
     private func findNode(_ path: String, in node: DiskNode) -> DiskNode? {
@@ -199,5 +255,34 @@ public final class DiskAnalysisViewModel {
             result.formUnion(descendantPaths(of: child))
         }
         return result
+    }
+
+    /// 移除 gone 路径对应的节点;返回 nil 表示该节点自身被移除。
+    /// 目录体量 = 存活子节点体量之和,差值随递归自然上溯至全部祖先。
+    private func removeGone(from node: DiskNode, gone: Set<String>) -> DiskNode? {
+        if gone.contains(node.path) { return nil }
+        guard !node.children.isEmpty else { return node }
+        let kept = node.children.compactMap { removeGone(from: $0, gone: gone) }
+        let newSize = kept.reduce(Int64(0)) { $0 + $1.sizeBytes }
+        let containsProtected = scanner.protection.isDenied(node.path)
+            || kept.contains(where: \.containsProtected)
+        return DiskNode(path: node.path, name: node.name, sizeBytes: newSize,
+                        isDirectory: node.isDirectory, children: kept,
+                        isDeniedTruncated: node.isDeniedTruncated,
+                        containsProtected: containsProtected)
+    }
+
+    /// 面包屑回退:保留自根起的存活前缀,遇首个被删节点即止(其子孙一并消失)。
+    private func pruneDrillPath() {
+        guard let newRoot = root else { drillPath = []; return }
+        var pruned: [DiskNode] = []
+        for node in drillPath {
+            if let alive = findNode(node.path, in: newRoot) {
+                pruned.append(alive)
+            } else {
+                break
+            }
+        }
+        drillPath = pruned.isEmpty ? [newRoot] : pruned
     }
 }

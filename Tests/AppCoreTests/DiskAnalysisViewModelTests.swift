@@ -14,6 +14,27 @@ struct FakeHistory: HistoryStoring {
     func loadAll() throws -> [CleanReport] { reports }
 }
 
+/// 记录写入历史(验证 cleanSelected 完成后入库与 source 透传)。HistoryStoring 为同步协议,
+/// 用锁保护可变状态而非 actor(actor 隔离会与同步协议需求交叉导致并发错误)。
+final class RecordingHistory: HistoryStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [CleanReport] = []
+    var appended: [CleanReport] { lock.withLock { stored } }
+    func append(_ report: CleanReport) throws { lock.withLock { stored.append(report) } }
+    func loadAll() throws -> [CleanReport] { lock.withLock { stored } }
+}
+
+/// 可在扫描后按路径路由结果的假 trash(跳过/消失用例:结果路径依赖扫描产出的规范路径)。
+actor RoutedTrash: TrashServicing {
+    private var outcomes: [String: TrashOutcome] = [:]
+    private(set) var calls: [String] = []
+    func route(_ path: String, to outcome: TrashOutcome) { outcomes[path] = outcome }
+    func trash(_ path: String) async -> TrashOutcome {
+        calls.append(path)
+        return outcomes[path] ?? .trashed
+    }
+}
+
 @Suite @MainActor
 final class DiskAnalysisViewModelTests {
     let dir: URL
@@ -28,13 +49,15 @@ final class DiskAnalysisViewModelTests {
         try? FileManager.default.removeItem(at: dir)
     }
 
-    func makeVM(hardRoots: [String] = [], userExclusions: [String] = []) -> DiskAnalysisViewModel {
+    func makeVM(hardRoots: [String] = [], userExclusions: [String] = [],
+                history: HistoryStoring? = nil,
+                trash: TrashServicing? = nil) -> DiskAnalysisViewModel {
         DiskAnalysisViewModel(
             scanner: DiskScanner(protection: ProtectionStore(hardRoots: hardRoots,
                                                              userExclusions: userExclusions)),
             exclusions: ExclusionsStore(defaults: UserDefaults(suiteName: defaultsSuite)!),
-            history: FakeHistory(),
-            trash: MockTrash(outcome: .trashed))
+            history: history ?? FakeHistory(),
+            trash: trash ?? MockTrash(outcome: .trashed))
     }
 
     /// 写入相对文件(自动建父目录);体量由磁盘块占用决定,断言只做相对关系。
@@ -235,5 +258,183 @@ final class DiskAnalysisViewModelTests {
 
         #expect(vm.remainingCount == 7)
         #expect(vm.remainingBytes == vm.root?.sizeBytes)
+    }
+
+    @Test func cleanSelectedTrashesTopmostSelection() async throws {
+        try makeTree()
+        let trash = MockTrash(outcome: .trashed)
+        let history = RecordingHistory()
+        let vm = makeVM(history: history, trash: trash)
+        vm.startScan(rootPath: dir.path)
+        await vm.task?.value
+
+        let root = try #require(vm.root)
+        let d2 = try #require(root.children.first { $0.name == "d2" })
+        vm.toggle(d2.path)
+        #expect(vm.selectedNodes.map(\.path) == [d2.path])
+
+        vm.cleanSelected()
+        await vm.task?.value
+
+        // 只 trash 最上层目录,不 trash 其子孙
+        let calls = await trash.calls
+        #expect(calls == [d2.path])
+
+        guard case .report(let report) = vm.phase else {
+            Issue.record("清理后应进入 report 态")
+            return
+        }
+        #expect(report.source == "disk-analysis")
+        #expect(vm.lastCleanup?.source == "disk-analysis")
+        #expect(history.appended.map(\.source) == ["disk-analysis"])
+    }
+
+    @Test func inPlaceUpdateRemovesAndPropagates() async throws {
+        try makeTree()
+        let vm = makeVM()
+        vm.startScan(rootPath: dir.path)
+        await vm.task?.value
+
+        let root = try #require(vm.root)
+        let d2 = try #require(root.children.first { $0.name == "d2" })
+        let d3 = try #require(d2.children.first { $0.name == "d3" })
+        let rootBefore = root.sizeBytes
+        let d2Before = d2.sizeBytes
+        let d3Before = d3.sizeBytes
+
+        vm.toggle(d3.path)
+        vm.cleanSelected()
+        await vm.task?.value
+
+        let root2 = try #require(vm.root)
+        #expect(root2.children.map(\.name).sorted() == ["a.txt", "d1", "d2"])
+        let d2After = try #require(root2.children.first { $0.name == "d2" })
+        #expect(d2After.children.map(\.name) == ["c.txt"])
+        #expect(d2After.sizeBytes == d2Before - d3Before)
+        #expect(root2.sizeBytes == rootBefore - d3Before)
+        #expect(vm.remainingBytes == rootBefore - d3Before)
+        #expect(!vm.selectedPaths.contains(d3.path))
+    }
+
+    @Test func skippedStaysSelectedAndInTree() async throws {
+        try makeTree()
+        let trash = RoutedTrash()
+        let vm = makeVM(trash: trash)
+        vm.startScan(rootPath: dir.path)
+        await vm.task?.value
+
+        let root = try #require(vm.root)
+        let a = try #require(root.children.first { $0.name == "a.txt" })
+        let rootBefore = root.sizeBytes
+
+        vm.toggle(a.path)
+        await trash.route(a.path, to: .skipped(reason: "no-permission"))
+
+        vm.cleanSelected()
+        await vm.task?.value
+
+        let root2 = try #require(vm.root)
+        #expect(root2.children.map(\.name).sorted() == ["a.txt", "d1", "d2"])
+        #expect(root2.sizeBytes == rootBefore)
+        #expect(vm.selectedPaths == [a.path])
+        guard case .report(let report) = vm.phase else {
+            Issue.record("清理后应进入 report 态")
+            return
+        }
+        #expect(report.trashedCount == 0)
+        #expect(report.skipped.map(\.path) == [a.path])
+    }
+
+    @Test func vanishedNotCountedAsFreed() async throws {
+        try makeTree()
+        let trash = RoutedTrash()
+        let vm = makeVM(trash: trash)
+        vm.startScan(rootPath: dir.path)
+        await vm.task?.value
+
+        let root = try #require(vm.root)
+        let d2 = try #require(root.children.first { $0.name == "d2" })
+        let d3 = try #require(d2.children.first { $0.name == "d3" })
+
+        vm.toggle(d3.path)
+        await trash.route(d3.path, to: .vanished)
+
+        vm.cleanSelected()
+        await vm.task?.value
+
+        guard case .report(let report) = vm.phase else {
+            Issue.record("清理后应进入 report 态")
+            return
+        }
+        #expect(report.freedBytes == 0)
+        #expect(report.vanishedCount == 1)
+
+        let root2 = try #require(vm.root)
+        let d2After = try #require(root2.children.first { $0.name == "d2" })
+        #expect(!d2After.children.contains { $0.name == "d3" })
+        #expect(!vm.selectedPaths.contains(d3.path))
+    }
+
+    @Test func drillPathFallsBackToSurvivingAncestor() async throws {
+        try makeTree()
+        let vm = makeVM()
+        vm.startScan(rootPath: dir.path)
+        await vm.task?.value
+
+        let root = try #require(vm.root)
+        let d2 = try #require(root.children.first { $0.name == "d2" })
+        let d3 = try #require(d2.children.first { $0.name == "d3" })
+        vm.drill(into: d2)
+        vm.drill(into: d3)
+        #expect(vm.drillPath.map(\.name) == [root.name, "d2", "d3"])
+
+        vm.toggle(d3.path)
+        vm.cleanSelected()
+        await vm.task?.value
+
+        vm.dismissReport()
+        #expect(vm.phase == .completed)
+        #expect(vm.drillPath.map(\.name) == [root.name, "d2"])
+
+        let root2 = try #require(vm.root)
+        let d2After = try #require(root2.children.first { $0.name == "d2" })
+        #expect(d2After.children.map(\.name) == ["c.txt"])
+    }
+
+    @Test func returnToResultsAndDismiss() async throws {
+        try makeTree()
+        let vm = makeVM()
+        vm.startScan(rootPath: dir.path)
+        await vm.task?.value
+
+        let root = try #require(vm.root)
+        let a = try #require(root.children.first { $0.name == "a.txt" })
+
+        // returnToResults:回到 completed 且保留更新后的树(a.txt 已移除)
+        vm.toggle(a.path)
+        vm.cleanSelected()
+        await vm.task?.value
+        guard case .report = vm.phase else {
+            Issue.record("第一次清理后应为 report 态")
+            return
+        }
+        vm.returnToResults()
+        #expect(vm.phase == .completed)
+        let root1 = try #require(vm.root)
+        #expect(!root1.children.contains { $0.name == "a.txt" })
+
+        // dismissReport:回到 completed 且保留更新后的树(d1 已移除)
+        let d1 = try #require(root1.children.first { $0.name == "d1" })
+        vm.toggle(d1.path)
+        vm.cleanSelected()
+        await vm.task?.value
+        guard case .report = vm.phase else {
+            Issue.record("第二次清理后应为 report 态")
+            return
+        }
+        vm.dismissReport()
+        #expect(vm.phase == .completed)
+        let root2 = try #require(vm.root)
+        #expect(!root2.children.contains { $0.name == "d1" })
     }
 }
