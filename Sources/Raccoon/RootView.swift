@@ -3,6 +3,7 @@ import ScanKit
 import AppCore
 import CleanKit
 import DiskKit
+import LaunchKit
 
 enum Module: String, CaseIterable, Identifiable {
     case cleanup, uninstall, aiCleanup, diskAnalysis, monitor
@@ -28,6 +29,7 @@ struct RootView: View {
     private var _aiVM: State<ScanViewModel>
     private var _diskVM: State<DiskAnalysisViewModel>
     private var _monitorVM: State<MonitorViewModel>
+    private var _launchItemsVM: State<LaunchItemsViewModel>
     private var _selection: State<Module>
 
     var vm: ScanViewModel {
@@ -53,6 +55,10 @@ struct RootView: View {
     var monitorVM: MonitorViewModel {
         get { _monitorVM.wrappedValue }
         nonmutating set { _monitorVM.wrappedValue = newValue }
+    }
+    var launchItemsVM: LaunchItemsViewModel {
+        get { _launchItemsVM.wrappedValue }
+        nonmutating set { _launchItemsVM.wrappedValue = newValue }
     }
 
     @MainActor
@@ -82,6 +88,16 @@ struct RootView: View {
             history: history))
         // 监控:只读采样,start 由 MonitorHomeView 的 .task 触发;不在此处建循环。
         _monitorVM = State(wrappedValue: MonitorViewModel(sampler: LiveSystemSampler()))
+        // 启动项:store 的 protection 仅是构造期基线;VM 每次 load/disable 会按
+        // exclusions 当前值实时重建(见 LaunchItemsViewModel 注释)。
+        let launchStore = LaunchItemStore(
+            trash: FileManagerTrashService(),
+            protection: ProtectionStore(userExclusions: exclusions.exclusions))
+        _launchItemsVM = State(wrappedValue: LaunchItemsViewModel(
+            scanner: LaunchItemScanner(),
+            store: launchStore,
+            exclusions: exclusions,
+            history: history))
         _selection = State(wrappedValue: .cleanup)
     }
 
@@ -118,7 +134,7 @@ struct RootView: View {
                 DiskAnalysisHomeView(vm: diskVM)
             case .monitor:
                 // 跨模块跳转(建议卡/工具入口)通过回调改选中项,复用侧边栏导航
-                MonitorHomeView(vm: monitorVM) { module in
+                MonitorHomeView(vm: monitorVM, launchItemsVM: launchItemsVM) { module in
                     selection = module
                 }
             case .cleanup:

@@ -12,8 +12,10 @@ public enum DisableOutcome: Sendable {
 }
 
 public struct LaunchItemStore: Sendable {
-    let trash: TrashServicing
-    let protection: ProtectionStore
+    // 公开只读:UI 层的 VM 需要在每次 load/disable 时用实时的用户排除清单重建 store
+    // (本类型在构造期把 ProtectionStore 快照在值里,后加的排除对它不可见)。
+    public let trash: TrashServicing
+    public let protection: ProtectionStore
 
     public init(trash: TrashServicing, protection: ProtectionStore) {
         self.trash = trash
