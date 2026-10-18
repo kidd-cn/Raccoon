@@ -184,7 +184,7 @@ diff <(grep -o '^"[^"]*"' Sources/Raccoon/Resources/zh-Hans.lproj/Localizable.st
 | 9.2 AI 页按工具分组;cautious 默认不勾、单独确认;safe 默认勾 | 混合 | 自动 5 + A4/A5/A6 | 自动:`AIToolGroupsTests` 四条 + 端到端默认勾口径;人工:组序目测、橙色、弹窗分区。 |
 | 9.3 清理只进废纸篓,报告与历史如实;未勾选与 skipped 保留 | 混合 | 自动 1/7 + A7/A8 | 自动:trash 唯一实现 grep + CleanKit 收敛测试;人工:废纸篓放回、报告数字目测。 |
 | 9.4 全程无提权、无 `rm`/unlink;`CleanExecutor` 仍是唯一删除路径(终审 grep 复核) | ✅ | 自动核验项 1 | 三条 grep 原文见上:unlink 零实现、`trashItem` 唯一实现(TrashService.swift:21)、提权模式零命中。 |
-| 9.5 `Scripts/test.sh` 全绿;L10n 键集 en/zh 1:1;CI 推送后实测绿 | 混合 | 自动 2/3 | 本地 199/199、105:105 已实测;**CI 属合并推送后的动作,本任务不推送、未跑**,合并后须在 `main` 复核(二期先例:CI run 实测绿后回填)。 |
+| 9.5 `Scripts/test.sh` 全绿;L10n 键集 en/zh 1:1;CI 推送后实测绿 | ✅ | 自动 3/3 | 本地 199/199、105:105 已实测;经用户指示合并推送至 `main`(`1592bf4`)后,GitHub Actions run [39095001666](https://github.com/kidd-cn/Raccoon/actions/runs/39095001666) 实测 **success**——构建、测试、L10n 键集一致性全过(2026-10-18,1m23s)。 |
 | 9.6 README 与 QA 清单如实更新,人工项不标绿 | ✅ | 本文档 + README | README 补三期功能、已知限制、Schema `tool` 字段、路线图状态;本清单 12 个人工项全部未预标绿。 |
 
 ## 统计
