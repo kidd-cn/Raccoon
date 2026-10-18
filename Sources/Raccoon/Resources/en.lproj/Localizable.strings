@@ -112,7 +112,7 @@
 "disk.progress.scanned" = "Scanned %@";
 "disk.view.treemap" = "Treemap";
 "disk.view.list" = "List";
-"disk.others" = "%d items · %@";
+"disk.others" = "%ld items · %@";
 "disk.list.protected" = "Protected";
 "disk.root.home" = "Home";
 "disk.empty" = "Nothing to display";

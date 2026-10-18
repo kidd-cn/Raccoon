@@ -213,6 +213,36 @@ final class DiskAnalysisViewModelTests {
         #expect(vm.selectedPaths == [subdir.path])
     }
 
+    @Test func exclusionsAddedAfterInitAreHonored() async throws {
+        // 独立 defaults suite,避免污染类级 defaultsSuite;结束移除持久域。
+        let suite = "davm-excl-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let store = ExclusionsStore(defaults: defaults)
+
+        try write("plain/a.txt", 100)
+        try write("excluded/b.txt", 200)
+
+        // init 时排除为空;init 后再 add → 校验扫描按当前清单实时重建保护层(而非 init 快照)
+        let vm = DiskAnalysisViewModel(
+            scanner: DiskScanner(protection: ProtectionStore(hardRoots: [], userExclusions: [])),
+            exclusions: store,
+            history: FakeHistory(),
+            trash: MockTrash(outcome: .trashed))
+        store.add(ProtectionStore.normalize(dir.appendingPathComponent("excluded").path))
+
+        vm.startScan(rootPath: dir.path)
+        await vm.task?.value
+
+        let root = try #require(vm.root)
+        let excluded = try #require(root.children.first { $0.name == "excluded" })
+        #expect(excluded.containsProtected)
+
+        vm.toggle(excluded.path)
+        #expect(!vm.selectedPaths.contains(excluded.path))
+
+        defaults.removePersistentDomain(forName: suite)
+    }
+
     @Test func selectionSurvivesDrill() async throws {
         try write("top/sub/inner.txt", 1_000)
         let vm = makeVM()

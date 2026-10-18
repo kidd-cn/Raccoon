@@ -69,7 +69,8 @@ struct RootView: View {
                                                       orphanScanner: services.orphans,
                                                       exclusions: exclusions,
                                                       history: history))
-        // 磁盘分析:扫描时用最新排除清单构建保护层(与 AppScanService 同口径),共享同一 history。
+        // 磁盘分析:scanner 仅作 hardRoots 来源;userExclusions 由 VM 在扫描/清理时按当前
+        // 排除清单实时重建(与 AppScanService 同口径),共享同一 history。
         _diskVM = State(wrappedValue: DiskAnalysisViewModel(
             scanner: DiskScanner(protection: ProtectionStore(userExclusions: exclusions.exclusions)),
             exclusions: exclusions,

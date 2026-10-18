@@ -32,6 +32,16 @@ public final class DiskAnalysisViewModel {
     public let history: HistoryStoring
     public let trash: TrashServicing
 
+    // scanner 仅作 hardRoots 配置来源;userExclusions 每次按 exclusions 当前值实时重建,
+    // 保证 init 后才新增的排除项在扫描/清理/树更新三处同源生效(init 时快照会漏掉后加的排除)。
+    private var effectiveProtection: ProtectionStore {
+        ProtectionStore(hardRoots: scanner.protection.hardRoots,
+                        userExclusions: exclusions.exclusions)
+    }
+    private var effectiveScanner: DiskScanner {
+        DiskScanner(protection: effectiveProtection)
+    }
+
     // 供测试等待(内部可见)
     var task: Task<Void, Never>?
 
@@ -55,7 +65,7 @@ public final class DiskAnalysisViewModel {
 
     private func runScan(rootPath: String) async {
         do {
-            let node = try await scanner.scan(root: rootPath) { [weak self] p in
+            let node = try await effectiveScanner.scan(root: rootPath) { [weak self] p in
                 Task { @MainActor [weak self] in self?.progress = p }
             }
             root = node
@@ -186,7 +196,7 @@ public final class DiskAnalysisViewModel {
         phase = .cleaning
         cleanProgress = CleanProgress(done: 0, total: items.count)
         // 与卸载页同构:清理时取扫描器同款保护层,删除引擎仍做最后一道 isDenied 兜底。
-        let executor = CleanExecutor(trash: trash, protection: scanner.protection)
+        let executor = CleanExecutor(trash: trash, protection: effectiveProtection)
         task = Task { [weak self] in
             await self?.runClean(items: items, executor: executor)
         }
@@ -264,7 +274,7 @@ public final class DiskAnalysisViewModel {
         guard !node.children.isEmpty else { return node }
         let kept = node.children.compactMap { removeGone(from: $0, gone: gone) }
         let newSize = kept.reduce(Int64(0)) { $0 + $1.sizeBytes }
-        let containsProtected = scanner.protection.isDenied(node.path)
+        let containsProtected = effectiveProtection.isDenied(node.path)
             || kept.contains(where: \.containsProtected)
         return DiskNode(path: node.path, name: node.name, sizeBytes: newSize,
                         isDirectory: node.isDirectory, children: kept,

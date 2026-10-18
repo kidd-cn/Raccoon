@@ -112,7 +112,7 @@
 "disk.progress.scanned" = "已扫描 %@";
 "disk.view.treemap" = "矩形树图";
 "disk.view.list" = "列表";
-"disk.others" = "%d 项 · %@";
+"disk.others" = "%ld 项 · %@";
 "disk.list.protected" = "受保护";
 "disk.root.home" = "主目录";
 "disk.empty" = "没有可显示的内容";
