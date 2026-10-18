@@ -6,12 +6,13 @@ import MonitorKit
 // MARK: - 采样假体
 
 /// 可编程假体:cpuTicks 每次调用按调用序数放大,保证跨采样差值恒非零;
-/// memoryFails 模拟单指标失败(memory() → nil)。VM 是 @MainActor,全部调用
-/// 发生在主 actor,锁只作跨 actor 读取计数的保险。
+/// memoryFails / cpuFails 模拟单指标失败(memory()/cpuTicks() → nil)。
+/// VM 是 @MainActor,全部调用发生在主 actor,锁只作跨 actor 读取计数的保险。
 final class FakeSampler: SystemSampling, @unchecked Sendable {
     private let lock = NSLock()
     private var tickCalls = 0
     var memoryFails = false
+    var cpuFails = false
 
     /// cpuTicks 累计调用次数(验证轮询循环条数,如 start 幂等)。
     var tickCallCount: Int { lock.withLock { tickCalls } }
@@ -29,6 +30,7 @@ final class FakeSampler: SystemSampling, @unchecked Sendable {
 
     func cpuTicks() -> [Int32]? {
         lock.withLock {
+            guard !cpuFails else { return nil }
             tickCalls += 1
             let n = Int32(tickCalls)
             // 单核四元组 (user, system, idle, nice):数值随调用序数增长 → 差值恒 > 0
@@ -145,6 +147,24 @@ final class MonitorViewModelTests {
         try await Task.sleep(for: .milliseconds(100))
         #expect(sampler.tickCallCount == 0)
         #expect(vm.phase == .idle)
+    }
+
+    @Test func cpuTicksFailureKeepsBaselineUnpolluted() {
+        let (vm, sampler) = makeVM()
+        sampler.cpuFails = true
+        vm.start()
+        #expect(vm.phase == .running)
+        vm.refreshFast()
+        vm.refreshFast()                       // 连续失败:不入历史、phase 不变
+        #expect(vm.cpuHistory.isEmpty)
+        #expect(vm.memory != nil)              // memory 照常落位
+        #expect(vm.phase == .running)
+        sampler.cpuFails = false
+        vm.refreshFast()                       // 恢复:失败期间未存过脏基准 → 按首采样处理
+        #expect(vm.cpuHistory.isEmpty)         // 仍不入(previousTicks 未被 nil 采样污染)
+        vm.refreshFast()                       // 基准建立后恢复正常出点
+        #expect(vm.cpuHistory.count == 1)
+        vm.stop()
     }
 
     @Test func setNetworkStoresStatus() {
