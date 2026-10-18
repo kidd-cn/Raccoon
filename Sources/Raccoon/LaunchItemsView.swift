@@ -69,8 +69,11 @@ struct LaunchItemsView: View {
     /// 确认后不先关 sheet:禁用期间确认卡片保持可见并显示进度/禁用按钮;
     /// 完成后同一 sheet 切换到报告态(失败则关闭,页面显示可读原因)。
     private func confirm(_ row: LaunchItemsViewModel.Row) {
+        // 双击排队时第二次必须原地返回,不得在第一次在飞期间把 sheet 关掉再重开。
+        guard !vm.isDisabling else { return }
         Task {
-            await vm.disable(row)
+            // disable 返回 false(被守卫挡下/前一刻变成受保护):保持当前 sheet 状态不动。
+            guard await vm.disable(row) else { return }
             if let report = vm.lastReport {
                 presentation = .report(report)
             } else {
@@ -87,7 +90,10 @@ struct LaunchItemsView: View {
     private var listContent: some View {
         List {
             Section {
-                if vm.userRows.isEmpty {
+                if !vm.hasLoaded {
+                    // 首轮扫描是同步枚举,通常一帧内完成;未完成前不渲染空态,避免闪烁。
+                    ProgressView().controlSize(.small)
+                } else if vm.userRows.isEmpty {
                     Text(loc("launch.empty")).foregroundStyle(.secondary)
                 } else {
                     ForEach(vm.userRows) { row in
@@ -102,18 +108,20 @@ struct LaunchItemsView: View {
                     }
                 }
             }
-            Section {
-                if vm.systemItems.isEmpty {
-                    Text(loc("launch.empty")).foregroundStyle(.secondary)
-                } else {
-                    ForEach(vm.systemItems) { item in
-                        systemRow(item)
+            if vm.hasLoaded {
+                Section {
+                    if vm.systemItems.isEmpty {
+                        Text(loc("launch.empty")).foregroundStyle(.secondary)
+                    } else {
+                        ForEach(vm.systemItems) { item in
+                            systemRow(item)
+                        }
                     }
+                } header: {
+                    Text(loc("launch.system"))
+                } footer: {
+                    Text(loc("launch.system.hint"))
                 }
-            } header: {
-                Text(loc("launch.system"))
-            } footer: {
-                Text(loc("launch.system.hint"))
             }
             if let error = vm.lastError {
                 Section {
@@ -129,6 +137,7 @@ struct LaunchItemsView: View {
         HStack(spacing: 10) {
             Image(systemName: "power")
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 // Label 缺失时退回文件名,列表永远有可读主标题。
                 Text(row.item.label ?? row.item.fileName)
@@ -163,6 +172,7 @@ struct LaunchItemsView: View {
         HStack(spacing: 10) {
             Image(systemName: "gearshape")
                 .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.label ?? item.fileName)
                     .lineLimit(1).truncationMode(.middle)

@@ -35,6 +35,8 @@ public final class LaunchItemsViewModel {
     /// 是否有一次禁用编排在飞。Finder 降级(osascript)可能挂数秒,
     /// 期间必须拒绝重入,否则报告/错误会互相覆盖。
     public private(set) var isDisabling = false
+    /// 首次扫描是否已完成:视图据此避免在加载前闪一帧空态。
+    public private(set) var hasLoaded = false
 
     private let scanner: LaunchItemScanner
     private let store: LaunchItemStore
@@ -58,6 +60,7 @@ public final class LaunchItemsViewModel {
     public func load() async {
         lastError = nil
         reload()
+        hasLoaded = true
     }
 
     /// 扫描是同步文件枚举;async 接口留给调用方统一 await(与其它 VM 一致)。
@@ -70,10 +73,13 @@ public final class LaunchItemsViewModel {
 
     /// 禁用一行:denied 快照直接 no-op;否则用实时保护层重建 store 再编排,
     /// 成功后记历史并重扫(条目消失),失败只记录原因、不伪造报告。
-    public func disable(_ row: Row) async {
+    /// 返回值表示本次调用是否真正执行了编排(false = 因 denied/重入被挡下),
+    /// 供 UI 在「双击排队」时不要误判结果并改坏 sheet 状态。
+    @discardableResult
+    public func disable(_ row: Row) async -> Bool {
         // 重入守卫放在最前:连点/并发第二次调用不得再触达假体或覆盖先到的结果。
-        guard !isDisabling else { return }
-        guard !row.denied else { return }
+        guard !isDisabling else { return false }
+        guard !row.denied else { return false }
         isDisabling = true
         lastError = nil
         defer { isDisabling = false }
@@ -81,7 +87,7 @@ public final class LaunchItemsViewModel {
         // load 之后新增的排除也必须拦住:重建后的 store 会在门禁处短路,零触达文件系统。
         guard !protection.isDenied(row.item.path) else {
             reload()
-            return
+            return false
         }
         let liveStore = LaunchItemStore(trash: store.trash, protection: protection)
         switch await liveStore.disable(row.item) {
@@ -98,6 +104,7 @@ public final class LaunchItemsViewModel {
             // 失败可能是外部已把 plist 删走/移走:重扫避免留下幽灵行。
             reload()
         }
+        return true
     }
 
     /// 登记用户排除并立即刷新 denied 判定(exclusions 为共享单一来源,不复制清单)。

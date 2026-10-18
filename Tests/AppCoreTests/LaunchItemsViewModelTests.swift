@@ -101,8 +101,11 @@ final class LaunchItemsViewModelTests {
         try writePlist(into: userDir, name: "com.test.alpha.plist", label: "com.test.alpha")
         try writePlist(into: systemDir, name: "com.sys.daemon.plist", label: "com.sys.daemon")
         let vm = makeVM()
+        #expect(!vm.hasLoaded)
 
         await vm.load()
+
+        #expect(vm.hasLoaded)
 
         #expect(vm.userRows.map(\.item.fileName) == ["broken-label.plist", "com.test.alpha.plist"])
         #expect(vm.userRows[0].item.label == nil)
@@ -120,7 +123,8 @@ final class LaunchItemsViewModelTests {
         let row = try #require(vm.userRows.first)
         #expect(row.denied)
 
-        await vm.disable(row)
+        let ran = await vm.disable(row)
+        #expect(!ran)
 
         let calls = await trash.calls
         #expect(calls.isEmpty)
@@ -179,12 +183,14 @@ final class LaunchItemsViewModelTests {
         }
         #expect(vm.isDisabling)
 
-        await vm.disable(row)          // 重入:必须 no-op
+        let secondRan = await vm.disable(row)   // 重入:必须 no-op 且报告未真正执行
+        #expect(!secondRan)
         let during = await trash.calls
         #expect(during.count == 1)
 
         await trash.open()
-        await first.value
+        let firstRan = await first.value
+        #expect(firstRan)
         let after = await trash.calls
         #expect(after.count == 1)
         #expect(!vm.isDisabling)
