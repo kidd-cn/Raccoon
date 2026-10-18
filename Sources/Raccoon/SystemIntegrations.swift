@@ -1,7 +1,10 @@
 import Foundation
 import MenuBarKit
+import os
 import ServiceManagement
 import UserNotifications
+
+private let logger = Logger(subsystem: "com.raccooncleaner.Raccoon", category: "menubar")
 
 /// `SMAppService` 的登录项实现。只做系统调用与状态映射,
 /// 是否允许注册等策略由调用方决定。
@@ -22,6 +25,15 @@ final class SMAppServiceLoginItem: LoginItemManaging, @unchecked Sendable {
     }
 
     func setEnabled(_ enabled: Bool) throws {
+        // 幂等:已注册(含待批准)或已注销时直接返回,避免重复调用
+        // register/unregister 触发 kSMErrorAlreadyRegistered 等错误被上层误判为失败。
+        if enabled, status == .enabled || status == .requiresApproval {
+            return
+        }
+        if !enabled, status == .disabled {
+            return
+        }
+
         if enabled {
             try SMAppService.mainApp.register()
         } else {
@@ -64,8 +76,12 @@ final class UNNotifier: Notifying, @unchecked Sendable {
             content: content,
             trigger: nil
         )
-        // Notifying 协议无错误通道,失败只能忽略;由系统决定是否可达。
-        try? await center.add(request)
+        // 协议无错误通道,不能向调用方抛出;但仍记录一次以便诊断投递失败。
+        do {
+            try await center.add(request)
+        } catch {
+            logger.error("通知投递失败:\(String(describing: error), privacy: .public)")
+        }
     }
 }
 

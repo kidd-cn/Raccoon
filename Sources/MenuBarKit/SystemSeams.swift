@@ -14,6 +14,9 @@ public protocol LoginItemManaging: Sendable {
 
 /// 通知发送抽象。授权与发送均为异步,实现方不得吞掉授权失败。
 public protocol Notifying: Sendable {
+    /// 返回 false 表示未获授权;「用户拒绝」与「请求失败」只有 Bool 通道,不可区分。
+    /// 调用方文案应表述为「无法获得通知权限」,不要断言用户拒绝;
+    /// 尚未请求(nil)须与 false 分开展示。
     func requestAuthorization() async -> Bool
     func post(_ kind: NotificationKind) async
 }
