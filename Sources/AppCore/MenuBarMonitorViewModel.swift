@@ -33,6 +33,12 @@ public final class MenuBarMonitorViewModel {
     private var previousTicks: [Int32]?
     private var fastTask: Task<Void, Never>?
     private var slowTask: Task<Void, Never>?
+    /// refreshNow 触发的通知评估任务:stop 时一并取消,避免游离任务越权投递。
+    private var notificationTask: Task<Void, Never>?
+    /// 通知评估非重入标志。评估在 await notifier.post 处让出 main actor,
+    /// 若另一个评估方此时进入,会在 lastNotified 写回前读到旧冷却表而重复投递。
+    /// 标志在首个 await 之前同步置位,重入方直接跳过(下一次慢拍会补评估)。
+    private var isEvaluatingNotifications = false
 
     public init(
         sampler: SystemSampling,
@@ -83,11 +89,14 @@ public final class MenuBarMonitorViewModel {
 
     /// 手动全量刷新:同步完成采样,通知评估因需 await 交给短命 Task,
     /// 不让同步接口阻塞调用方(菜单栏点击/首帧)。循环路径仍走 refreshSlow。
+    /// 任务被持有以便 stop 取消;重入由 evaluateNotifications 的标志兜底。
     public func refreshNow() {
         refreshFast()
         sampleSlowMetrics()
-        Task { [weak self] in
-            await self?.evaluateNotifications()
+        notificationTask?.cancel()
+        notificationTask = Task { [weak self] in
+            guard let self, !Task.isCancelled else { return }
+            await self.evaluateNotifications()
         }
     }
 
@@ -137,6 +146,8 @@ public final class MenuBarMonitorViewModel {
         fastTask = nil
         slowTask?.cancel()
         slowTask = nil
+        notificationTask?.cancel()
+        notificationTask = nil
     }
 
     // MARK: - 采样
@@ -149,7 +160,12 @@ public final class MenuBarMonitorViewModel {
     }
 
     /// 通知评估与冷却落盘。命中项才写时间戳,saveLastNotified 按 kind 合并。
+    /// 非重入:进入即置位、结束 defer 复位,保证并发评估只有一方真正投递。
     private func evaluateNotifications() async {
+        guard !isEvaluatingNotifications else { return }
+        isEvaluatingNotifications = true
+        defer { isEvaluatingNotifications = false }
+
         let hits = NotificationPolicy.evaluate(
             snapshot: snapshot,
             preferences: preferences,

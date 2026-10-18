@@ -104,24 +104,68 @@ final class FakeNotifier: Notifying, @unchecked Sendable {
     }
 }
 
-/// 登录项假体:可设当前状态、成功后的状态与抛错。
+/// 登录项假体:可设当前状态、成功后的状态与抛错;
+/// `statusWhenThrowing` 模拟系统在失败路径上已改写状态,验证 VM 重读而非用旧值。
 final class FakeLoginItem: LoginItemManaging, @unchecked Sendable {
     private let lock = NSLock()
     private var setEnabledCalls: [Bool] = []
 
     var status: LoginItemStatus = .disabled
     var statusAfterSet: LoginItemStatus?
+    var statusWhenThrowing: LoginItemStatus?
     var errorToThrow: Error?
 
     var calls: [Bool] { lock.withLock { setEnabledCalls } }
 
     func setEnabled(_ enabled: Bool) throws {
-        if let errorToThrow { throw errorToThrow }
+        if let errorToThrow {
+            if let statusWhenThrowing { status = statusWhenThrowing }
+            throw errorToThrow
+        }
         lock.withLock { setEnabledCalls.append(enabled) }
         if let statusAfterSet { status = statusAfterSet }
     }
 
     func openSystemSettings() {}
+}
+
+/// 会挂起 post 的通知假体:用于强制两个评估方交错,
+/// 钉住「第二次评估在第一次 await post 期间进入」这一真实竞态窗口。
+final class SuspendingNotifier: Notifying, @unchecked Sendable {
+    private let lock = NSLock()
+    private var postedKinds: [NotificationKind] = []
+    private var postEntered = false
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    var posts: [NotificationKind] { lock.withLock { postedKinds } }
+    var hasEnteredPost: Bool { lock.withLock { postEntered } }
+
+    func requestAuthorization() async -> Bool { true }
+
+    func post(_ kind: NotificationKind) async {
+        await withCheckedContinuation { continuation in
+            lock.withLock {
+                postEntered = true
+                continuations.append(continuation)
+            }
+        }
+        lock.withLock { postedKinds.append(kind) }
+    }
+
+    /// 放行所有已挂起的 post(修复前会有两个,修复后只有一个)。
+    func releaseAll() {
+        let waiting = lock.withLock {
+            let c = continuations
+            continuations = []
+            return c
+        }
+        for continuation in waiting { continuation.resume() }
+    }
+
+    /// 轮询等待首个 post 进入挂起状态(MainActor 上 Task.yield 让出即可推进)。
+    func waitUntilPostEntered() async {
+        while !hasEnteredPost { await Task.yield() }
+    }
 }
 
 /// 可变时钟:通知冷却需要推进时间,@Sendable 闭包通过引用盒子读取。
@@ -142,7 +186,7 @@ final class MenuBarMonitorViewModelTests {
     private func makeVM(
         preferences: MenuBarPreferences = MenuBarPreferences(),
         store: FakePreferenceStore? = nil,
-        notifier: FakeNotifier = FakeNotifier(),
+        notifier: any Notifying = FakeNotifier(),
         loginItem: FakeLoginItem = FakeLoginItem(),
         sampler: MenuBarFakeSampler = MenuBarFakeSampler(),
         fast: TimeInterval = 60,
@@ -196,18 +240,18 @@ final class MenuBarMonitorViewModelTests {
         vm.stop()
     }
 
-    // 3. start 幂等:两次 start 不产生第二组循环
+    // 3. start 幂等:两次 start 不产生第二组循环(完全确定性)
     @Test func startIsIdempotent() async throws {
         let sampler = MenuBarFakeSampler()
-        let vm = makeVM(sampler: sampler, fast: 0.01, slow: 60)
+        // 双循环各有一拍首采样;间隔 60s 保证窗口内不可能二拍,
+        // 故 tick 次数恰为 1(= 一组循环),双循环会是 2。
+        let vm = makeVM(sampler: sampler, fast: 60, slow: 60)
         vm.start()
         vm.start()
         #expect(vm.isStarted)
-        try await Task.sleep(for: .milliseconds(60))
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(sampler.tickCallCount == 1)
         vm.stop()
-        // 单循环在 60ms 内最多约 7 拍;双循环会接近翻倍。
-        #expect(sampler.tickCallCount > 0)
-        #expect(sampler.tickCallCount <= 12)
         #expect(!vm.isStarted)
     }
 
@@ -301,6 +345,57 @@ final class MenuBarMonitorViewModelTests {
         vm.stop()
     }
 
+    // 8b. 授权通过:开启偏好并持久化,只请求一次
+    @Test func grantedAuthorizationEnablesNotifications() async {
+        let store = FakePreferenceStore()
+        let notifier = FakeNotifier()
+        notifier.authorizationResult = true
+        let vm = makeVM(store: store, notifier: notifier)
+
+        await vm.setNotificationsEnabled(true)
+        #expect(vm.notificationAuthorized == true)
+        #expect(vm.preferences.notificationsEnabled == true)
+        #expect(store.preferences.notificationsEnabled == true)
+        #expect(store.saveCount == 1)
+        #expect(notifier.requestCount == 1)
+        vm.stop()
+    }
+
+    // 8c. 关闭通知:直接保存 false,不触发授权请求
+    @Test func disablingNotificationsSkipsAuthorizationRequest() async {
+        let store = FakePreferenceStore(
+            preferences: MenuBarPreferences(notificationsEnabled: true)
+        )
+        let notifier = FakeNotifier()
+        let vm = makeVM(store: store, notifier: notifier)
+
+        await vm.setNotificationsEnabled(false)
+        #expect(vm.preferences.notificationsEnabled == false)
+        #expect(store.preferences.notificationsEnabled == false)
+        #expect(store.saveCount == 1)
+        #expect(notifier.requestCount == 0)
+        #expect(vm.notificationAuthorized == nil)
+        vm.stop()
+    }
+
+    // 8d. 并发评估只投递一次:第一个评估挂在 post 上时第二个进入,应被挡下
+    @Test func concurrentEvaluationsPostOnlyOnce() async throws {
+        let notifier = SuspendingNotifier()
+        let vm = makeVM(
+            preferences: MenuBarPreferences(notificationsEnabled: true),
+            notifier: notifier
+        )
+        let first = Task { await vm.refreshSlow() }
+        await notifier.waitUntilPostEntered()
+        let second = Task { await vm.refreshSlow() }
+        try await Task.sleep(for: .milliseconds(50))   // 让第二个评估跑到 await 处
+        notifier.releaseAll()
+        await first.value
+        await second.value
+        #expect(notifier.posts == [.lowDisk])
+        vm.stop()
+    }
+
     // 9. requiresApproval 不是失败:记录开启意图,不设错误
     @Test func requiresApprovalRecordsIntentWithoutError() {
         let store = FakePreferenceStore()
@@ -317,17 +412,18 @@ final class MenuBarMonitorViewModelTests {
         vm.stop()
     }
 
-    // 10. 自启抛错:错误可读,状态保持 fake 当前值,偏好不变
+    // 10. 自启抛错:错误可读,状态重读系统当前值(而非沿用抛错前的旧值)
     @Test func loginItemErrorSurfacesAndKeepsStatus() {
         let store = FakePreferenceStore()
         let login = FakeLoginItem()
         login.status = .enabled
+        login.statusWhenThrowing = .unavailable
         login.errorToThrow = NSError(domain: "test", code: 1)
         let vm = makeVM(store: store, loginItem: login)
 
         vm.setLaunchAtLogin(false)
         #expect(vm.lastError != nil)
-        #expect(vm.loginStatus == .enabled)
+        #expect(vm.loginStatus == .unavailable)   // 系统在失败路径上已改写状态
         #expect(vm.preferences.launchAtLogin == false)
         #expect(store.saveCount == 0)
         vm.stop()
@@ -340,6 +436,26 @@ final class MenuBarMonitorViewModelTests {
         vm.setMemoryThreshold(1.0)
         #expect(vm.preferences.memoryThreshold == 0.95)
         #expect(store.preferences.memoryThreshold == 0.95)
+        vm.stop()
+    }
+
+    // 12. stop 后重 start:循环确实重新工作,isStarted 状态正确
+    @Test func stopThenStartRestartsLoops() async throws {
+        let sampler = MenuBarFakeSampler()
+        let vm = makeVM(sampler: sampler, fast: 60, slow: 60)
+        vm.start()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(sampler.tickCallCount == 1)
+
+        vm.stop()
+        #expect(!vm.isStarted)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(sampler.tickCallCount == 1)    // 停摆后不再采样
+
+        vm.start()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(vm.isStarted)
+        #expect(sampler.tickCallCount == 2)    // 重启后首拍继续
         vm.stop()
     }
 }
