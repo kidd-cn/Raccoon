@@ -36,7 +36,8 @@ import MenuBarKit
     // MARK: - 磁盘
 
     @Test func diskPercentRounds() {
-        // 100/300 = 33.33…% → 33,验证的是四舍五入而非截断。
+        // 100/300 = 33.33…% → 33,钉住的是「可用/总量」的取值口径;
+        // 四舍五入本身由 diskPercentRoundsHalfUp(62.5→63)覆盖。
         let snapshot = MenuBarSnapshot(volumes: [volume(total: 300, available: 100)])
         let label = MenuBarLabelFormatter.label(metric: .disk, style: .iconAndValue, snapshot: snapshot)
         #expect(label == .percent(33))
