@@ -11,8 +11,9 @@ final class AIToolGroupsTests {
     @Test func groups_inCanonicalOrder_sizeDescWithin() {
         let groups = AIToolGrouper.groups(in: [
             h("/c1", 10, tool: "cursor"), h("/c2", 50, tool: "cursor"),
-            h("/cd", 30, tool: "claude-desktop"), h("/o", 5, tool: "ollama")])
-        #expect(groups.map(\.tool) == ["claude-desktop", "cursor", "ollama"])
+            h("/cd", 30, tool: "claude-desktop"), h("/o", 5, tool: "ollama"),
+            h("/g", 7, tool: "chatgpt")])
+        #expect(groups.map(\.tool) == ["claude-desktop", "cursor", "ollama", "chatgpt"])
         #expect(groups[1].hits.map(\.path) == ["/c2", "/c1"])   // 组内按大小降序
     }
 

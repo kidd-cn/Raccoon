@@ -17,9 +17,8 @@ public enum AIToolGrouper {
     public static func groups(in hits: [ScanHit]) -> [AIToolGroup] {
         let byTool = Dictionary(grouping: hits, by: \.tool)
         var ordered: [String?] = canonicalOrder.filter { !(byTool[$0] ?? []).isEmpty }
-        ordered += byTool.keys
-            .filter { $0 != nil && !canonicalOrder.contains($0!) }
-            .sorted { $0! < $1! }
+        // 未收录工具值(含空串 tool:按未知处理排最前、id 为 "";生产侧由 BundledRulesTests 的非空 tool 门禁挡住)按字典序排已知工具后。
+        ordered += byTool.keys.compactMap { $0 }.filter { !canonicalOrder.contains($0) }.sorted()
         if !(byTool[nil] ?? []).isEmpty { ordered.append(nil) }
         return ordered.map { tool in
             AIToolGroup(tool: tool,
