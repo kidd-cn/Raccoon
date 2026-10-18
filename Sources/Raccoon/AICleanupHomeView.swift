@@ -49,6 +49,9 @@ struct AICleanupHomeView: View {
             if let last = vm.lastCleanup {
                 Text(loc("home.lastCleanup", byteText(last.freedBytes)))
                     .font(.footnote).foregroundStyle(.secondary)
+            } else {
+                Text(loc("home.neverCleaned"))
+                    .font(.footnote).foregroundStyle(.secondary)
             }
         }
     }

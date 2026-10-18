@@ -87,6 +87,19 @@ import CleanKit
         #expect(lr.rules.allSatisfy { $0.tool != "other" })
     }
 
+    // AI 页组头文案按 ai.tool.<tool> 拼键:新工具值若未同步补 AIToolGrouper.canonicalOrder
+    // 与 ai.tool.* 双语键,会把裸键「ai.tool.<id>」直接画成组头——白名单守卫挡在 CI,
+    // 新工具落地前必须先补齐分组顺序与两份文案
+    @Test func aiRuleToolsAreKnownValues() throws {
+        let lr = try RuleStore().loadBundled()
+        let known: Set<String> = ["claude-desktop", "claude-code", "cursor", "codex",
+                                  "ollama", "huggingface", "chatgpt"]
+        for rule in lr.rules where rule.category == .ai {
+            #expect(rule.tool.map(known.contains) == true,
+                    "\(rule.id) 的 tool \(rule.tool ?? "nil") 不在已知白名单,须先补 canonicalOrder 与 ai.tool.* 文案")
+        }
+    }
+
     // 用户数据整棵目录只允许以精确子路径为根;~/.claude、~/.ollama 本体永不作根(spec §5)
     @Test func aiRuleRootsAreNotUserDataDirectories() throws {
         let lr = try RuleStore().loadBundled()
