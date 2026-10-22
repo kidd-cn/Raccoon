@@ -5,8 +5,9 @@ import MonitorKit
 
 /// 菜单栏常驻监控 VM:双频采样(fast = CPU/内存,slow = 卷/电池 + 通知评估),
 /// 并把偏好、自启与通知授权状态聚合成视图可直接消费的只读面向。
-/// 与五期 MonitorViewModel 共用 SystemSampling / computeCPULoad,但本类只服务
-/// 菜单栏窄口径快照,不维护历史曲线与前台/后台状态机。
+/// 与五期 MonitorViewModel 共用 SystemSampling / computeCPULoad 与 60 点 CPU
+/// 环形历史(面板 sparkline 消费),但本类只服务菜单栏窄口径快照,
+/// 不维护前台/后台状态机。
 @MainActor
 @Observable
 public final class MenuBarMonitorViewModel {
@@ -14,6 +15,9 @@ public final class MenuBarMonitorViewModel {
     public private(set) var snapshot: MenuBarSnapshot
     public private(set) var label: MenuBarLabel
     public private(set) var isStarted = false
+    /// CPU 历史曲线:内部为 SampleRing(容量 60,溢出弃最旧),最旧在前;
+    /// 只读投影(存储在 ring 里,外部不可直接改写)。与五期 MonitorViewModel 同口径。
+    public var cpuHistory: [CPULoad] { cpuRing.values }
     /// nil = 尚未询问过系统授权;false 表示明确被拒。
     public private(set) var notificationAuthorized: Bool?
     public private(set) var loginStatus: LoginItemStatus
@@ -33,6 +37,7 @@ public final class MenuBarMonitorViewModel {
     private var lastNotified: [NotificationKind: Date]
     /// 上一次 CPU tick:首采样无基准时 computeCPULoad 返回 nil。
     private var previousTicks: [Int32]?
+    private var cpuRing = SampleRing<CPULoad>(capacity: 60)
     private var fastTask: Task<Void, Never>?
     private var slowTask: Task<Void, Never>?
     /// refreshNow 触发的通知评估任务:stop 时一并取消,避免游离任务越权投递。
@@ -106,13 +111,15 @@ public final class MenuBarMonitorViewModel {
         }
     }
 
-    /// 快频:memory + CPU。单项取不到时保留旧值,其余字段与 label 照常更新。
+    /// 快频:memory + CPU。单项取不到时保留旧值,其余字段与 label 照常更新;
+    /// CPU 历史只在成功出点时追加,失败期间冻结(五期同语义,stop 亦保留数据)。
     public func refreshFast() {
         let memory = sampler.memory()
         var cpu = snapshot.cpu
         if let current = sampler.cpuTicks() {
             if let load = computeCPULoad(previous: previousTicks, current: current) {
                 cpu = load
+                cpuRing.append(load)
             }
             // 基准无条件前移:无效区间(长度不符等)只丢当前点,下轮即恢复。
             previousTicks = current

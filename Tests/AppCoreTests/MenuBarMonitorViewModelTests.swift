@@ -519,4 +519,39 @@ final class MenuBarMonitorViewModelTests {
         #expect(sampler.tickCallCount == 2)    // 重启后首拍继续
         vm.stop()
     }
+
+    // 13. CPU 历史:首采样无基准不入环,第二拍出点入环(与五期同语义)
+    @Test func refreshFastFirstSampleEmptyThenOnePoint() {
+        let vm = makeVM()
+        vm.refreshFast()
+        #expect(vm.cpuHistory.isEmpty)         // 首采样无基准,不入历史
+        vm.refreshFast()
+        #expect(vm.cpuHistory.count == 1)
+        vm.stop()
+    }
+
+    // 14. CPU 历史为定长环形:65 拍封顶 60,溢出弃最旧
+    @Test func cpuHistoryCapsAt60() {
+        let vm = makeVM()
+        for _ in 0..<65 { vm.refreshFast() }
+        #expect(vm.cpuHistory.count == 60)
+        vm.stop()
+    }
+
+    // 15. CPU 失败期间历史冻结:不入、不清空;恢复后以上次成功基准继续出点
+    @Test func cpuHistoryFrozenWhileSamplerFails() {
+        let sampler = MenuBarFakeSampler()
+        let vm = makeVM(sampler: sampler)
+        vm.refreshFast()
+        vm.refreshFast()
+        #expect(vm.cpuHistory.count == 1)
+        sampler.cpuFails = true
+        vm.refreshFast()
+        vm.refreshFast()
+        #expect(vm.cpuHistory.count == 1)      // 失败不入环也不清空
+        sampler.cpuFails = false
+        vm.refreshFast()
+        #expect(vm.cpuHistory.count == 2)      // 基准未被 nil 采样污染,恢复即续点
+        vm.stop()
+    }
 }

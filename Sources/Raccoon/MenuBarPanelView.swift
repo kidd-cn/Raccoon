@@ -125,8 +125,10 @@ struct MenuBarPanelView: View {
         VStack(alignment: .leading, spacing: 5) {
             sectionTitle(loc("menubar.metric.cpu"), icon: "cpu")
             if let cpu = vm.snapshot.cpu {
-                // VM 未暴露历史序列,只画最新单点(SparklineView 会绘制圆点)。
-                SparklineView(values: [cpu.userPct + cpu.systemPct], tint: .accentColor)
+                // 60 点环形历史逐点推进(与五期 MonitorHomeView 同映射口径);
+                // snapshot.cpu 出点 ⇔ 历史入点,故此处非 nil 时序列至少 1 个。
+                SparklineView(values: vm.cpuHistory.map { $0.userPct + $0.systemPct },
+                              tint: .accentColor)
                     .frame(height: 30)
                 HStack(alignment: .firstTextBaseline, spacing: 14) {
                     Text(percentText(cpu.userPct + cpu.systemPct))

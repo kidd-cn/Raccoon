@@ -66,6 +66,9 @@ struct MenuBarSettingsPane: View {
                     Spacer()
                     Text("\(memoryPercent)%")
                         .monospacedDigit()
+                        // 数值已由 Stepper 的 accessibilityValue 播报,视觉文本
+                        // 隐藏避免 VoiceOver 连读两遍同一百分比。
+                        .accessibilityHidden(true)
                     // 本 SDK 的 Stepper 无「无标签」初始化器:空标题 + labelsHidden,
                     // 数值由左侧 Text 呈现。labelsHidden 后 VoiceOver 失去控件名称,
                     // 须显式补无障碍名称与当前值(与 Task 7 进度条口径一致)。
