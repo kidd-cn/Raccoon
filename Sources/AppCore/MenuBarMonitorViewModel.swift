@@ -17,6 +17,8 @@ public final class MenuBarMonitorViewModel {
     /// nil = 尚未询问过系统授权;false 表示明确被拒。
     public private(set) var notificationAuthorized: Bool?
     public private(set) var loginStatus: LoginItemStatus
+    /// 最近一次登录项更新失败的稳定码(当前恒为 "login-item",同 LaunchItemsViewModel
+    /// 的 "protected" 口径);可读文案由视图层本地化,AppCore 不持有文案。nil = 无错误。
     public private(set) var lastError: String?
 
     private let sampler: SystemSampling
@@ -39,6 +41,10 @@ public final class MenuBarMonitorViewModel {
     /// 若另一个评估方此时进入,会在 lastNotified 写回前读到旧冷却表而重复投递。
     /// 标志在首个 await 之前同步置位,重入方直接跳过(下一次慢拍会补评估)。
     private var isEvaluatingNotifications = false
+    /// 通知意图代际:每次进入 setNotificationsEnabled 自增并捕获。
+    /// 授权弹窗挂起期间用户再次切换(含关闭)时,旧调用 await 回来后代际不符,
+    /// 丢弃其结果——以用户最后一次意图为准,避免迟到的授权结果覆写偏好。
+    private var notificationsGeneration = 0
 
     public init(
         sampler: SystemSampling,
@@ -208,8 +214,8 @@ public final class MenuBarMonitorViewModel {
             // UI 再据 loginStatus 引导用户去设置中批准。
             savePreferences(launchAtLogin: enabled)
         } catch {
-            let message = error.localizedDescription
-            lastError = message.isEmpty ? "无法更新登录项" : message
+            // 稳定码而非系统文案:UI 按码出本地化整句(AppCore 零文案)。
+            lastError = "login-item"
             // 失败时状态可能已被系统改写,以 fake/系统当前值为准,不回填成功偏好。
             loginStatus = loginItem.status
         }
@@ -220,11 +226,16 @@ public final class MenuBarMonitorViewModel {
     }
 
     public func setNotificationsEnabled(_ enabled: Bool) async {
+        // 进入即换 generation(关闭分支同样要作废在飞的授权结果)。
+        notificationsGeneration += 1
+        let generation = notificationsGeneration
         guard enabled else {
             savePreferences(notificationsEnabled: false)
             return
         }
         let authorized = await notifier.requestAuthorization()
+        // 弹窗挂起期间又发生了新一次切换:本次结果作废,既不写授权缓存也不写偏好。
+        guard generation == notificationsGeneration else { return }
         notificationAuthorized = authorized
         // 授权被拒时如实保存 false,不假装开启。
         savePreferences(notificationsEnabled: authorized)

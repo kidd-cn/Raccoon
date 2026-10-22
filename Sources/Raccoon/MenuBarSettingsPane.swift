@@ -19,6 +19,7 @@ struct MenuBarSettingsPane: View {
                     }
                 }
                 .pickerStyle(.menu)
+                .accessibilityLabel(loc("menubar.panel.metric"))
 
                 Picker(loc("menubar.settings.iconStyle"), selection: iconStyleBinding) {
                     ForEach(MenuBarIconStyle.allCases, id: \.self) { style in
@@ -26,12 +27,14 @@ struct MenuBarSettingsPane: View {
                     }
                 }
                 .pickerStyle(.menu)
+                .accessibilityLabel(loc("menubar.settings.iconStyle"))
 
                 Divider()
 
                 Toggle(isOn: launchAtLoginBinding) {
                     Text(loc("menubar.settings.launchAtLogin"))
                 }
+                .accessibilityLabel(loc("menubar.settings.launchAtLogin"))
                 // 系统已登记但未获批:引导用户去设置批准,不重复注册。
                 if vm.loginStatus == .requiresApproval {
                     caption(loc("menubar.settings.requiresApproval"))
@@ -49,6 +52,7 @@ struct MenuBarSettingsPane: View {
                 Toggle(isOn: notificationsBinding) {
                     Text(loc("menubar.settings.notifications"))
                 }
+                .accessibilityLabel(loc("menubar.settings.notifications"))
                 caption(loc("menubar.settings.notifyHint"))
                 // nil(尚未询问)与 false(未获授权)分开处理:仅 false 出引导行。
                 // 授权通道只有 Bool,拒绝与失败不可区分,文案据实说「无法获得」。
@@ -63,15 +67,20 @@ struct MenuBarSettingsPane: View {
                     Text("\(memoryPercent)%")
                         .monospacedDigit()
                     // 本 SDK 的 Stepper 无「无标签」初始化器:空标题 + labelsHidden,
-                    // 数值由左侧 Text 呈现,避免重复。
+                    // 数值由左侧 Text 呈现。labelsHidden 后 VoiceOver 失去控件名称,
+                    // 须显式补无障碍名称与当前值(与 Task 7 进度条口径一致)。
                     Stepper("", value: memoryPercentBinding, in: 70...95, step: 5)
                         .labelsHidden()
+                        .accessibilityLabel(loc("menubar.settings.memoryThreshold"))
+                        .accessibilityValue("\(memoryPercent)%")
                 }
                 // 阈值只在通知开启时有意义;关闭时禁用,避免改不动也说不清。
                 .disabled(!vm.preferences.notificationsEnabled)
 
-                if let error = vm.lastError {
-                    Text(loc("menubar.settings.error", error))
+                // lastError 是稳定码("login-item"),本地化整句由本层出;
+                // 系统错误文本可能含随机信息,不透传。
+                if vm.lastError != nil {
+                    Text(loc("menubar.settings.error"))
                         .font(.caption)
                         .foregroundStyle(.red)
                         .frame(maxWidth: .infinity, alignment: .leading)

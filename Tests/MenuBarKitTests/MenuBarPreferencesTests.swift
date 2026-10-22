@@ -46,6 +46,16 @@ import MenuBarKit
         #expect(MenuBarPreferences(memoryThreshold: 0.80).memoryThreshold == 0.80)
     }
 
+    // 设置页 Stepper 用字面量 70...95、步长 5 呈现本区间:界值必须能换算成整数
+    // 百分比且步长恰好可达两界,防止未来改区间时与 UI 字面量漂移。
+    // 乘 100 有浮点误差(0.70×100 ≠ 70.0),换算口径与 UI 的 rounded 一致。
+    @Test func thresholdRangeMapsToWholePercentSteps() {
+        let range = MenuBarPreferences.memoryThresholdRange
+        #expect(Int((range.lowerBound * 100).rounded()) == 70)
+        #expect(Int((range.upperBound * 100).rounded()) == 95)
+        #expect((95 - 70) % 5 == 0)
+    }
+
     // MARK: - 持久化往返
 
     @Test func storeRoundTripPreservesAllFields() {

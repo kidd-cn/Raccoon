@@ -168,6 +168,45 @@ final class SuspendingNotifier: Notifying, @unchecked Sendable {
     }
 }
 
+/// 授权可挂起的假 notifier:requestAuthorization 挂起直到 releaseAuthorization。
+/// 用于钉住「授权在飞、用户再次切换」的代际竞态窗口——没有这个假体,
+/// 「弹窗未落定用户就再点一次」的真实时序无法在测试里确定性地复现。
+final class GatedAuthNotifier: Notifying, @unchecked Sendable {
+    private let lock = NSLock()
+    private var entered = false
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+    var authorizationResult = true
+
+    var hasEnteredRequest: Bool { lock.withLock { entered } }
+
+    func requestAuthorization() async -> Bool {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            lock.withLock {
+                entered = true
+                continuations.append(continuation)
+            }
+        }
+        return authorizationResult
+    }
+
+    /// 放行所有挂起中的授权请求(结果取当前 authorizationResult)。
+    func releaseAuthorization() {
+        let waiting = lock.withLock {
+            let c = continuations
+            continuations = []
+            return c
+        }
+        for continuation in waiting { continuation.resume() }
+    }
+
+    /// 轮询等待授权进入挂起(与 SuspendingNotifier.waitUntilPostEntered 同法)。
+    func waitUntilRequestSuspended() async {
+        while !hasEnteredRequest { await Task.yield() }
+    }
+
+    func post(_ kind: NotificationKind) async {}
+}
+
 /// 可变时钟:通知冷却需要推进时间,@Sendable 闭包通过引用盒子读取。
 final class MutableClock: @unchecked Sendable {
     var now: Date
@@ -396,6 +435,28 @@ final class MenuBarMonitorViewModelTests {
         vm.stop()
     }
 
+    // 8e. 授权挂起期间再关通知:迟到的 true 不得覆盖最后意图(代际守卫)
+    @Test func staleAuthorizationIsDiscardedAfterNewerIntent() async throws {
+        let store = FakePreferenceStore()
+        let notifier = GatedAuthNotifier()
+        notifier.authorizationResult = true
+        let vm = makeVM(store: store, notifier: notifier)
+
+        let onCall = Task { await vm.setNotificationsEnabled(true) }
+        await notifier.waitUntilRequestSuspended()
+        // 弹窗仍挂起时用户关闭通知:直接落 false,并作废在飞的授权结果
+        await vm.setNotificationsEnabled(false)
+        notifier.releaseAuthorization()   // 授权结果 true 迟到返回
+        await onCall.value
+
+        #expect(vm.preferences.notificationsEnabled == false)
+        #expect(store.preferences.notificationsEnabled == false)
+        // 仅 OFF 的一次 save:迟到结果既不写偏好也不写授权缓存(保持未询问态)
+        #expect(store.saveCount == 1)
+        #expect(vm.notificationAuthorized == nil)
+        vm.stop()
+    }
+
     // 9. requiresApproval 不是失败:记录开启意图,不设错误
     @Test func requiresApprovalRecordsIntentWithoutError() {
         let store = FakePreferenceStore()
@@ -412,7 +473,7 @@ final class MenuBarMonitorViewModelTests {
         vm.stop()
     }
 
-    // 10. 自启抛错:错误可读,状态重读系统当前值(而非沿用抛错前的旧值)
+    // 10. 自启抛错:错误为稳定码(视图层据此出文案),状态重读系统当前值
     @Test func loginItemErrorSurfacesAndKeepsStatus() {
         let store = FakePreferenceStore()
         let login = FakeLoginItem()
@@ -422,7 +483,7 @@ final class MenuBarMonitorViewModelTests {
         let vm = makeVM(store: store, loginItem: login)
 
         vm.setLaunchAtLogin(false)
-        #expect(vm.lastError != nil)
+        #expect(vm.lastError == "login-item")
         #expect(vm.loginStatus == .unavailable)   // 系统在失败路径上已改写状态
         #expect(vm.preferences.launchAtLogin == false)
         #expect(store.saveCount == 0)

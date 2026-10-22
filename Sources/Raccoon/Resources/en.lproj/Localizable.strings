@@ -175,7 +175,7 @@
 "menubar.settings.notifyHint" = "Alerts when disk space is low or memory usage is high (at most once every 6 hours per type).";
 "menubar.settings.notifyDenied" = "Notification permission is unavailable. Allow notifications for Raccoon in System Settings.";
 "menubar.settings.memoryThreshold" = "Memory Alert Threshold";
-"menubar.settings.error" = "Login item update failed: %@";
+"menubar.settings.error" = "Login item update failed.";
 "launch.title" = "Login Items";
 "launch.user" = "User Login Items";
 "launch.system" = "System Login Items";
