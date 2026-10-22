@@ -8,13 +8,13 @@ struct MenuBarLabelView: View {
     let vm: MenuBarMonitorViewModel
 
     // 本机 CLT 工具链缺 SwiftUI 宏插件,手写 @State 展开(见 RaccoonApp.swift)。
-    private var _networkWatcher: State<MenuBarNetworkWatcher>
+    private var _networkWatcher: State<NetworkPathWatcher>
 
-    private var networkWatcher: MenuBarNetworkWatcher { _networkWatcher.wrappedValue }
+    private var networkWatcher: NetworkPathWatcher { _networkWatcher.wrappedValue }
 
     init(vm: MenuBarMonitorViewModel) {
         self.vm = vm
-        _networkWatcher = State(wrappedValue: MenuBarNetworkWatcher())
+        _networkWatcher = State(wrappedValue: NetworkPathWatcher())
     }
 
     var body: some View {
@@ -58,8 +58,9 @@ struct MenuBarLabelView: View {
         case .percent(let value):
             return "\(value)%"
         case .network(let status):
+            // 在线/离线的标题映射与监控页、下拉面板共用同一 helper。
             guard let status else { return placeholder }
-            return status.online ? interfaceTitle(status.interface) : loc("monitor.network.offline")
+            return interfaceTitle(status)
         case .none:
             return placeholder
         }
@@ -72,13 +73,5 @@ struct MenuBarLabelView: View {
             return loc("menubar.label.accessibility", "\(metric) \(value)")
         }
         return loc("menubar.label.accessibility", metric)
-    }
-
-    private func interfaceTitle(_ interface: NetworkInterface) -> String {
-        switch interface {
-        case .wifi: loc("monitor.network.wifi")
-        case .wired: loc("monitor.network.wired")
-        case .other: loc("monitor.network.other")
-        }
     }
 }

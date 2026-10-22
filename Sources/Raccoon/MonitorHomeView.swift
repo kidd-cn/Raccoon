@@ -18,14 +18,14 @@ struct MonitorHomeView: View {
 
     private var _scenePhase: Environment<ScenePhase>
     private var _facts: State<ProbeFacts>
-    private var _networkObserver: State<MenuBarNetworkWatcher>
+    private var _networkObserver: State<NetworkPathWatcher>
 
     private var scenePhase: ScenePhase { _scenePhase.wrappedValue }
     private var facts: ProbeFacts {
         get { _facts.wrappedValue }
         nonmutating set { _facts.wrappedValue = newValue }
     }
-    private var networkObserver: MenuBarNetworkWatcher { _networkObserver.wrappedValue }
+    private var networkObserver: NetworkPathWatcher { _networkObserver.wrappedValue }
 
     init(vm: MonitorViewModel, launchItemsVM: LaunchItemsViewModel,
          navigation: NavigationModel,
@@ -36,7 +36,7 @@ struct MonitorHomeView: View {
         self.onNavigate = onNavigate
         _scenePhase = Environment(\.scenePhase)
         _facts = State(wrappedValue: ProbeFacts())
-        _networkObserver = State(wrappedValue: MenuBarNetworkWatcher())
+        _networkObserver = State(wrappedValue: NetworkPathWatcher())
     }
 
     var body: some View {
@@ -172,7 +172,8 @@ struct MonitorHomeView: View {
                 let icon = battery.charging ? "battery.100.bolt" : "battery.100"
                 StatusCard(icon: icon,
                            title: title,
-                           detail: "\(Int(battery.percentage.rounded()))%")
+                           // assembleBatteryInfo 已夹取到 0...100,percentText 显示无变化。
+                           detail: percentText(battery.percentage))
             } else {
                 // 台式机 / 无电池机型:hasBattery=false 本身就是有效数据,显示外接电源
                 StatusCard(icon: "powerplug", title: loc("monitor.battery.external"), detail: nil)
@@ -182,19 +183,12 @@ struct MonitorHomeView: View {
         }
     }
 
-    @ViewBuilder
     private var networkCard: some View {
-        if let network = vm.network {
-            if network.online {
-                StatusCard(icon: networkIcon(network.interface),
-                           title: networkTitle(network.interface),
-                           detail: nil)
-            } else {
-                StatusCard(icon: "wifi.slash", title: loc("monitor.network.offline"), detail: nil)
-            }
-        } else {
-            StatusCard(icon: "network", title: loc("monitor.unavailable"), detail: nil)
-        }
+        // 标题/图标映射共享 interfaceTitle/interfaceIcon:
+        // nil → 「暂不可用」+ network,离线 → 「离线」+ wifi.slash,与原分支语义一致。
+        StatusCard(icon: interfaceIcon(vm.network),
+                   title: interfaceTitle(vm.network),
+                   detail: nil)
     }
 
     // MARK: - 建议卡
@@ -330,23 +324,8 @@ struct MonitorHomeView: View {
     private func cpuValue(_ label: String, _ percent: Double) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label).font(.caption).foregroundStyle(.secondary)
-            Text("\(Int(percent.rounded()))%").font(.callout).monospacedDigit()
-        }
-    }
-
-    private func networkTitle(_ interface: NetworkInterface) -> String {
-        switch interface {
-        case .wifi: loc("monitor.network.wifi")
-        case .wired: loc("monitor.network.wired")
-        case .other: loc("monitor.network.other")
-        }
-    }
-
-    private func networkIcon(_ interface: NetworkInterface) -> String {
-        switch interface {
-        case .wifi: "wifi"
-        case .wired: "cable.connector"
-        case .other: "network"
+            // 共享 percentText(夹取口径);合法 CPU 占比本就在 0...100,显示无变化。
+            Text(percentText(percent)).font(.callout).monospacedDigit()
         }
     }
 }

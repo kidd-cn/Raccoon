@@ -8,7 +8,7 @@ import MonitorKit
 ///
 /// 监控页与菜单栏共用同一实现:两处都需要「路径变化 → 主 actor 回调」,
 /// 复制两份会让取消/重建语义各自漂移。
-final class MenuBarNetworkWatcher: @unchecked Sendable {
+final class NetworkPathWatcher: @unchecked Sendable {
     private let lock = NSLock()
     private let queue = DispatchQueue(label: "com.raccoon.monitor.network-path")
     private var monitor: NWPathMonitor?

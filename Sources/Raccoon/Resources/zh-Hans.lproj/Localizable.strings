@@ -154,6 +154,7 @@
 "menubar.notify.highMemory.body" = "关闭不用的应用，释放内存。";
 "menubar.panel.metric" = "菜单栏指标";
 "menubar.panel.quickActions" = "快捷入口";
+"menubar.panel.disk.accessibility" = "磁盘可用 %@";
 "menubar.metric.disk" = "磁盘";
 "menubar.metric.memory" = "内存";
 "menubar.metric.cpu" = "CPU";

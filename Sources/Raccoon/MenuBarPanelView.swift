@@ -77,13 +77,23 @@ struct MenuBarPanelView: View {
                 }
                 ProgressView(value: Double(volume.totalBytes - volume.availableBytes),
                              total: Double(max(volume.totalBytes, 1)))
-                Text(loc("monitor.disk.purgeable", byteText(volume.purgeableBytes)))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(loc("menubar.panel.disk.accessibility",
+                                            percentText(availablePercent(volume))))
+                // 与五期磁盘卡口径一致:无可清除空间时不占一行。
+                if volume.purgeableBytes > 0 {
+                    Text(loc("monitor.disk.purgeable", byteText(volume.purgeableBytes)))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 unavailable
             }
         }
+    }
+
+    /// 可用空间占比(0...100);total ≤ 0 时按 0 计,不产生除零。
+    private func availablePercent(_ volume: VolumeInfo) -> Double {
+        Double(volume.availableBytes) / Double(max(volume.totalBytes, 1)) * 100
     }
 
     @ViewBuilder
@@ -93,6 +103,8 @@ struct MenuBarPanelView: View {
             if let memory = vm.snapshot.memory {
                 ProgressView(value: Double(memory.usedBytes),
                              total: Double(max(memory.totalBytes, 1)))
+                    // 与五期内存卡同一标签键。
+                    .accessibilityLabel(loc("monitor.memory.used"))
                 Text("\(byteText(memory.usedBytes)) / \(byteText(memory.totalBytes))")
                     .font(.callout)
                 HStack(alignment: .top, spacing: 14) {
@@ -160,14 +172,9 @@ struct MenuBarPanelView: View {
         VStack(alignment: .leading, spacing: 5) {
             sectionTitle(loc("menubar.metric.network"), icon: "wifi")
             if let network = vm.snapshot.network {
-                if network.online {
-                    Label(interfaceTitle(network.interface),
-                          systemImage: interfaceIcon(network.interface))
-                        .font(.callout)
-                } else {
-                    Label(loc("monitor.network.offline"), systemImage: "wifi.slash")
-                        .font(.callout)
-                }
+                // 在线/离线标题与图标共用共享 helper,与标签、监控页同口径。
+                Label(interfaceTitle(network), systemImage: interfaceIcon(network))
+                    .font(.callout)
             } else {
                 unavailable
             }
@@ -223,6 +230,7 @@ struct MenuBarPanelView: View {
         Label(title, systemImage: icon)
             .font(.caption)
             .foregroundStyle(.secondary)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private func stat(_ title: String, _ value: String) -> some View {
@@ -253,30 +261,9 @@ struct MenuBarPanelView: View {
         .controlSize(.small)
     }
 
-    private func percentText(_ value: Double) -> String {
-        let clamped = min(100, max(0, value.rounded()))
-        return "\(Int(clamped))%"
-    }
-
     private func batteryTitle(_ battery: BatteryInfo) -> String {
         if battery.charging { return loc("monitor.battery.charging") }
         if battery.onBattery { return loc("monitor.battery.onbattery") }
         return loc("monitor.battery.external")
-    }
-
-    private func interfaceTitle(_ interface: NetworkInterface) -> String {
-        switch interface {
-        case .wifi: loc("monitor.network.wifi")
-        case .wired: loc("monitor.network.wired")
-        case .other: loc("monitor.network.other")
-        }
-    }
-
-    private func interfaceIcon(_ interface: NetworkInterface) -> String {
-        switch interface {
-        case .wifi: "wifi"
-        case .wired: "cable.connector"
-        case .other: "network"
-        }
     }
 }
