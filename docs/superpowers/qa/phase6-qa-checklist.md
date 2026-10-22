@@ -5,38 +5,38 @@
 > - **✅ 自动核验**:证据为真实运行的命令输出、测试名与文件位置,或明确标注的代码锚点;不包含任何 GUI 目测结论。
 > - **⏳ 待人工**:需 GUI 交互或人眼判断,附操作步骤与预期,一律未预标绿。
 >
-> **实测基线(2026-10-22,分支 `feat/phase6`,代码态 `2e98922`;本文档所有数字均来自本清单编写前在该代码态的实际运行,共执行全量测试 3 次,各组计数逐次一致)**:
+> **实测基线(2026-10-22,分支 `feat/phase6`,代码态 `7baac93`;本文档所有数字均来自本清单编写前在该代码态的实际运行,共执行全量测试 3 次,各组计数逐次一致)**:
 >
-> - `Scripts/test.sh` 全量 **372/372 绿**(五期基线 300 → 六期 372,只增不减,净增 72:新增 `MenuBarKitTests` 组 56,末组 `AppCoreTests` 91 → 107)。
+> - `Scripts/test.sh` 全量 **375/375 绿**(五期基线 300 → 六期 375,只增不减,净增 75:新增 `MenuBarKitTests` 组 56,末组 `AppCoreTests` 91 → 110)。
 > - 中英 L10n 各 **195** 键,键集 diff 为空(195:195 1:1;五期基线 167 → 六期 +28)。
 > - 删除红线 grep 符合期望:全仓零 unlink/removeItem 实现,唯一删除实现仍为 `TrashService.swift:21` 的 `FileManager.trashItem`;六期代码 diff(`main..HEAD`,限 `Sources` 与 `Package.swift`)零新增 `removeItem`/`unlink`/`Process(` 调用。
-> - `swift build` 通过(零 error);工具链 6.3、零第三方依赖。
+> - `swift build` 通过(零 error);tools-version 6.3、零第三方依赖。
 > - 本文档所有「✅」均以该次实测为准;命令输出逐条留存原文,无编造。
 >
-> **数值可复现性说明**:本文档中的字节数、百分比、耗时均为当次运行值,会随机型、系统负载、卷状态与电池状态变化;可复现的是测试计数(372)、exit code、L10n 键数与构建成功与否,不是具体数值。
+> **数值可复现性说明**:本文档中的字节数、百分比、耗时均为当次运行值,会随机型、系统负载、卷状态与电池状态变化;可复现的是测试计数(375)、exit code、L10n 键数与构建成功与否,不是具体数值。
 
 ## 一、✅ 自动核验项(6 项)
 
-### 1. 全量测试 372/372 绿 — ✅
+### 1. 全量测试 375/375 绿 — ✅
 
 ```text
 $ Scripts/test.sh 2>&1 | grep -E "Test run with|error:"
 ```
 
-8 组结果行原文(执行于 `2e98922`):
+8 组结果行原文(执行于 `7baac93`):
 
 ```text
-✔ Test run with 66 tests in 6 suites passed after 0.049 seconds.
-✔ Test run with 48 tests in 4 suites passed after 0.122 seconds.
+✔ Test run with 66 tests in 6 suites passed after 0.047 seconds.
+✔ Test run with 48 tests in 4 suites passed after 0.102 seconds.
 ✔ Test run with 32 tests in 6 suites passed after 0.001 seconds.
 ✔ Test run with 56 tests in 3 suites passed after 0.008 seconds.
 ✔ Test run with 20 tests in 3 suites passed after 0.002 seconds.
-✔ Test run with 14 tests in 2 suites passed after 0.204 seconds.
-✔ Test run with 29 tests in 8 suites passed after 0.092 seconds.
-✔ Test run with 107 tests in 10 suites passed after 0.894 seconds.
+✔ Test run with 14 tests in 2 suites passed after 0.203 seconds.
+✔ Test run with 29 tests in 8 suites passed after 0.093 seconds.
+✔ Test run with 110 tests in 10 suites passed after 0.708 seconds.
 ```
 
-合计 66 + 48 + 32 + 56 + 20 + 14 + 29 + 107 = **372**,exit 0,无 skip、无 fail、无 `error:` 行。
+合计 66 + 48 + 32 + 56 + 20 + 14 + 29 + 110 = **375**,exit 0,无 skip、无 fail、无 `error:` 行。
 
 组归属(另一次带套件名上下文的运行中,每组结果行之前逐列的 `✔ Suite …` 名与其 suites 数一一对应):
 
@@ -49,9 +49,9 @@ $ Scripts/test.sh 2>&1 | grep -E "Test run with|error:"
 | 5 | 20/3 | LaunchKitTests |
 | 6 | 14/2 | DiskKitTests |
 | 7 | 29/8 | CleanKitTests |
-| 8 | **107/10** | AppCoreTests(含 MenuBarMonitorViewModelTests,五期记录为 91 → 六期 107) |
+| 8 | **110/10** | AppCoreTests(含 MenuBarMonitorViewModelTests,五期记录为 91 → 六期 110;`7baac93` 补 CPU 历史 3 用例 107 → 110) |
 
-> 注:每行末尾的秒级计时为当次运行值,因机而异、不可精确复现;测试计数(372)与 exit(0)可复现。本文档编写前共完整运行 3 次,8 组计数逐次一致。
+> 注:每行末尾的秒级计时为当次运行值,因机而异、不可精确复现;测试计数(375)与 exit(0)可复现。本文档编写前共完整运行 3 次,8 组计数逐次一致。
 
 ### 2. 删除红线 grep:零 unlink/removeItem 实现,唯一 trashItem 实现,六期零新增危险调用 — ✅
 
@@ -75,7 +75,7 @@ $ git diff main..HEAD -- Sources Package.swift | grep -E '^\+.*(removeItem|unlin
 
 结论:六期零新增删除路径,`FileManager.trashItem` 仍是唯一删除实现,菜单栏与通知不触碰删除,与 spec §6 红线表一致。
 
-### 3. 工具链:Swift 6.3、零第三方依赖 — ✅
+### 3. tools-version 6.3、零第三方依赖 — ✅
 
 ```text
 $ grep -n "swift-tools-version" Package.swift
@@ -85,6 +85,8 @@ $ grep -rn "\.package(" Package.swift
 (无输出,grep exit 1)
 # → 零第三方依赖 → 符合期望
 ```
+
+> 注:6.3 是 `Package.swift` 的 `swift-tools-version` 最低声明,不是本机编译器版本(本机 CLT `swift --version` 为 6.4);两者不可混称。
 
 ### 4. L10n 键集:195:195,diff 为空;zh 全角抽查通过 — ✅
 
@@ -121,7 +123,7 @@ $ grep -n 'menubar.settings' Sources/Raccoon/Resources/zh-Hans.lproj/Localizable
 
 ```text
 $ swift build 2>&1 | grep -E "error:|Build complete" | tail -3
-Build complete! (1.86秒)
+Build complete! (1.70秒)
 ```
 
 > 注:构建耗时因机而异;`Build complete` 与零 error 可复现。
@@ -130,6 +132,8 @@ Build complete! (1.86秒)
 
 ```text
 $ git log --oneline main..HEAD
+7baac93 feat(menubar): 面板 CPU sparkline 接入 60 点历史
+d657380 docs: 六期收尾——README、QA 清单、规格状态
 2e98922 fix(menubar): 登录项错误码化、Stepper 无障碍与授权代际守卫
 96d0d39 feat(menubar): 设置页菜单栏 tab(自启/通知/阈值)与双语文案
 8f16d8a fix(menubar): 磁盘进度条无障碍标签口径统一
@@ -151,7 +155,7 @@ ca6df06 docs(test): 修正磁盘百分比用例注释口径(四舍五入由 .5 �
 b58737b feat(menubar): MenuBarKit 与菜单栏文案格式化
 ```
 
-共 19 个提交,覆盖 MenuBarKit 纯逻辑、AppCore ViewModel、系统薄壳、UI(MenuBarExtra/面板/设置 tab)与修复轮次。
+共 21 个提交,覆盖 MenuBarKit 纯逻辑、AppCore ViewModel、系统薄壳、UI(MenuBarExtra/面板/设置 tab)、修复轮次与文档收尾;本清单自身所在的 docs 提交在其后,不含于上表。
 
 ## 二、⏳ 待人工项(15 项,一律未预标绿)
 
@@ -168,7 +172,7 @@ b58737b feat(menubar): MenuBarKit 与菜单栏文案格式化
 ### A3. 下拉面板五类指标卡与 CPU sparkline — ⏳ 待人工
 
 - [ ] 步骤:点击菜单栏图标展开面板,逐卡检查磁盘/内存/CPU/电池/网络。
-- 预期:五类卡片自上而下齐备——磁盘卡(可用/总量 + 条形)、内存卡(已用/总量 + 压缩/联动/可清除)、CPU 卡(百分比 + sparkline 曲线,逐点推进、最多 60 点)、电池卡(按机型显示充电/电池/外接)、网络卡(接口类型或离线);采不到的指标卡显示「暂不可用」占位,整页无裸 key、无布局溢出。
+- 预期:五类卡片自上而下齐备——磁盘卡(可用/总量 + 条形)、内存卡(已用/总量 + 压缩/联动/可清除)、CPU 卡(百分比 + sparkline 曲线:消费 VM 的 60 点 CPU 环形历史,逐点推进、最多 60 点,首拍 CPU 未就绪时显示「正在采集首个样本…」占位而非裸数字)、电池卡(按机型显示充电/电池/外接)、网络卡(接口类型或离线);曲线仅 CPU 卡有,内存/网络卡为数值摘要(无曲线,见已知限制第 8 条);采不到的指标卡显示「暂不可用」占位,整页无裸 key、无布局溢出。
 
 ### A4. 面板打开即刷新(onAppear refreshNow)— ⏳ 待人工
 
@@ -213,7 +217,7 @@ b58737b feat(menubar): MenuBarKit 与菜单栏文案格式化
 ### A12. 设置页「菜单栏」tab 控件与无障碍 — ⏳ 待人工
 
 - [ ] 步骤:打开设置页 →「菜单栏」tab,逐项操作:指标四选一、图标样式、开机自启、阈值通知、内存阈值 Stepper(拖到 70 以下与 95 以上各一次);开 VoiceOver 遍历该 tab。
-- 预期:五组控件齐全、即时生效并持久化;Stepper 被钳制在 70%–95% 区间到界即停;VoiceOver 对每个控件播报可读标签与当前值(阈值与磁盘进度条无障碍标签按 `2e98922`/`8f16d8a` 修复后口径),不出现只读不到值或读裸 key 的情况。
+- 预期:五组控件齐全、即时生效并持久化;Stepper 被钳制在 70%–95% 区间到界即停;VoiceOver 对每个控件播报可读标签与当前值(阈值与磁盘进度条无障碍标签按 `2e98922`/`8f16d8a`/`7baac93` 修复后口径,其中 `7baac93` 隐藏阈值旁视觉百分比避免与 Stepper 值重读),不出现只读不到值或读裸 key 的情况。
 
 ### A13. 深浅色与窄菜单栏布局 — ⏳ 待人工
 
@@ -232,7 +236,7 @@ b58737b feat(menubar): MenuBarKit 与菜单栏文案格式化
 
 ## 已知限制
 
-引用 spec §9 全部七条(README「已知限制」节已同步,内存 Mach 口径一条与五期既有限制相同、README 中不重复列出):
+引用 spec §9 全部八条(README「已知限制」节已同步,内存 Mach 口径一条与五期既有限制相同、README 中不重复列出):
 
 1. 菜单栏文字受系统可用宽度限制,长文本可能被系统截断(图标样式可切「仅图标」)
 2. 应用未运行时无法采样或发通知;需开启开机自启才能常驻
@@ -241,12 +245,13 @@ b58737b feat(menubar): MenuBarKit 与菜单栏文案格式化
 5. 内存口径为 Mach 统计,与活动监视器「内存压力」不一一对应
 6. 通知只在慢循环(30s)评估,阈值触发最长延迟 30s
 7. 不做仅菜单栏模式,退出主窗口后 Dock 图标仍在
+8. 下拉面板曲线仅 CPU sparkline(60 点环形历史,`7baac93` 起为真曲线);内存/网络为数值摘要,无曲线(spec §1 概述的「CPU/内存/网络 sparkline」宽于详设 §5.3,以本条为准)
 
 沿承一至五期的限制不变:`~/Library/Preferences` 与 `~/Library/Cookies` 因硬保护不列出;系统级 `/Library` 残留与任何提权继续顺延;磁盘分析无 FDA 时 `~/Library` 部分子树不可读、体量口径为块占用;会话登录项无法免 root 列举。
 
 ## 统计
 
-- **✅ 自动核验:6 项**(全量测试、删除红线 grep、工具链、L10n、swift build、提交序列)。
+- **✅ 自动核验:6 项**(全量测试、删除红线 grep、tools-version、L10n、swift build、提交序列)。
 - **⏳ 待人工:15 项**(A1–A15),每项均为 `- [ ]` 未勾选,给出操作步骤与预期,无一预标绿。
 
-**结论**:工程侧自动可核验面全部为绿(372/372、L10n 195:195、安全 grep 符合期望、swift build 通过);六期功能与交互的人工验收尚未执行,本文档不宣称任何未真机验证项为「满足」。
+**结论**:工程侧自动可核验面全部为绿(375/375、L10n 195:195、安全 grep 符合期望、swift build 通过);六期功能与交互的人工验收尚未执行,本文档不宣称任何未真机验证项为「满足」。

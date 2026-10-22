@@ -156,3 +156,4 @@ MonitorKit (五期)     VolumeInfo / MemoryStats / CPULoad / BatteryInfo / Netwo
 - 内存口径为 Mach 统计,与活动监视器「内存压力」不一一对应
 - 通知只在慢循环(30s)评估,阈值触发最长延迟 30s
 - 不做仅菜单栏模式,退出主窗口后 Dock 图标仍在
+- 下拉面板曲线仅 CPU sparkline(60 点环形历史,`7baac93` 起为真曲线);内存/网络为数值摘要,无曲线——§1 概述的「CPU/内存/网络 sparkline」宽于详设 §5.3,以本条为准
