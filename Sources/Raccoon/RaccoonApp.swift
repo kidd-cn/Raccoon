@@ -40,8 +40,12 @@ struct RaccoonApp: App {
     }
 
     var body: some Scene {
-        // id 供菜单栏面板的 openWindow(id:) 复用同一主窗口,而不是再开一个副本。
-        WindowGroup(id: "main") {
+        // 单窗口场景:openWindow(id:) 对 Window 是「已开则置前、已关则重开同一窗口」;
+        // WindowGroup 语义允许多窗口,openWindow(id:) 会每次新开副本(人工 QA 实测),
+        // 且每个副本会各自重建 RootView 内的全套 VM,故必须用 Window 而非 WindowGroup。
+        // Window 的 init 无默认标题(与 WindowGroup 不同),传空串沿用下方
+        // navigationTitle 承担窗口标题的既有口径。
+        Window("", id: "main") {
             RootView(exclusions: exclusions, navigation: navigation)
                 .frame(minWidth: 860, minHeight: 560)
                 // 27.0 SDK 无 Scene.windowTitle;用内容级 navigationTitle 承担窗口标题。
