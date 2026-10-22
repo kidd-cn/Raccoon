@@ -49,7 +49,8 @@ struct RaccoonApp: App {
                 .navigationTitle(loc("app.name"))
         }
         Settings {
-            SettingsView(exclusions: exclusions)
+            // 与菜单栏下拉面板共用同一 VM:设置页改偏好后,标签即时反映。
+            SettingsView(exclusions: exclusions, menuBarVM: menuBarVM)
         }
         // .task 在 MenuBarLabelView 内启动采样,不在此处 start:App init 早于
         // 视图生命周期,启动即建循环会拖慢冷启动。

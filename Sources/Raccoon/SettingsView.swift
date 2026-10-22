@@ -5,11 +5,15 @@ import AppCore
 struct SettingsView: View {
     // 本体只读转发给子 pane(绑定需求在 pane 内各自 @Bindable),故用 let;RootView 同口径
     let exclusions: ExclusionsStore
+    // 菜单栏 VM 是 @Observable:pane 内 body 读字段自动登记依赖,同样 let 转发
+    let menuBarVM: MenuBarMonitorViewModel
 
     var body: some View {
         TabView {
             ExclusionsPane(exclusions: exclusions)
                 .tabItem { Label(loc("settings.exclusions"), systemImage: "hand.raised") }
+            MenuBarSettingsPane(vm: menuBarVM)
+                .tabItem { Label(loc("menubar.settings.tab"), systemImage: "menubar.rectangle") }
             AboutPane()
                 .tabItem { Label(loc("settings.about"), systemImage: "info.circle") }
         }
