@@ -77,8 +77,9 @@ struct MenuBarPanelView: View {
                 }
                 ProgressView(value: Double(volume.totalBytes - volume.availableBytes),
                              total: Double(max(volume.totalBytes, 1)))
+                    // 与填充同口径(已用比):VoiceOver 念出的数字必须和条长一致。
                     .accessibilityLabel(loc("menubar.panel.disk.accessibility",
-                                            percentText(availablePercent(volume))))
+                                            percentText(usedPercent(volume))))
                 // 与五期磁盘卡口径一致:无可清除空间时不占一行。
                 if volume.purgeableBytes > 0 {
                     Text(loc("monitor.disk.purgeable", byteText(volume.purgeableBytes)))
@@ -91,9 +92,10 @@ struct MenuBarPanelView: View {
         }
     }
 
-    /// 可用空间占比(0...100);total ≤ 0 时按 0 计,不产生除零。
-    private func availablePercent(_ volume: VolumeInfo) -> Double {
-        Double(volume.availableBytes) / Double(max(volume.totalBytes, 1)) * 100
+    /// 已用占比(0...100),与 ProgressView 填充同一公式;total ≤ 0 按 0 计,不产生除零。
+    private func usedPercent(_ volume: VolumeInfo) -> Double {
+        Double(max(0, volume.totalBytes - volume.availableBytes))
+            / Double(max(volume.totalBytes, 1)) * 100
     }
 
     @ViewBuilder

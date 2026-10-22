@@ -154,7 +154,7 @@
 "menubar.notify.highMemory.body" = "Close unused apps to free up memory.";
 "menubar.panel.metric" = "Menu Bar Metric";
 "menubar.panel.quickActions" = "Quick Actions";
-"menubar.panel.disk.accessibility" = "Disk available %@";
+"menubar.panel.disk.accessibility" = "Disk used %@";
 "menubar.metric.disk" = "Disk";
 "menubar.metric.memory" = "Memory";
 "menubar.metric.cpu" = "CPU";
