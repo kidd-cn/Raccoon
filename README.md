@@ -1,8 +1,10 @@
 # Raccoon · 浣熊清理 🦝
 
+[English](README.en.md) · 简体中文
+
 ![CI](https://github.com/kidd-cn/Raccoon/actions/workflows/ci.yml/badge.svg)
 
-macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 预览勾选 → 确认后移入废纸篓。开源免费(MIT),吉祥物是浣熊,对标开源清理工具 Mole 的完整功能集,分六期实现。
+macOS 原生清理工具:扫描系统垃圾与应用缓存 → 分类统计 → 预览勾选 → 确认后移入废纸篓。开源免费(MIT),吉祥物是浣熊,对标开源清理工具 Mole 的完整功能集,分多期迭代实现。
 
 - **macOS 原生**:Swift 6 + SwiftUI,纯系统控件,自动浅色/深色模式,零第三方依赖
 - **中英双语**:简体中文 / English,跟随系统语言
