@@ -285,24 +285,64 @@ public final class LiveSystemSampler: SystemSampling, Sendable {
     }
 
     /// 自开机以来各物理接口累计收发字节。薄壳不单测(同 volumes() 口径,靠代码审):
-    /// 只做 getifaddrs/freeifaddrs 系统调用与 assembleTrafficCounters 纯函数组装。
-    /// 链表中仅 AF_LINK 条目携带 if_data(接口级计数),其余地址族(IPv4/IPv6 等)
-    /// ifa_data 为 nil,自然跳过;同名接口只保留首条——getifaddrs 对同一接口按
-    /// 地址族返回多条而计数是接口级同一份,先到先得,再交给 assembleTrafficCounters
-    /// 复用同一套 en 白名单去重口径;无任何 en 接口 → nil。
+    /// 只做 sysctl(NET_RT_IFLIST2) 系统调用与 assembleTrafficCounters 纯函数组装。
+    /// 数据源刻意不走 getifaddrs:其 AF_LINK 条目的 ifa_data 指向 32 位 struct
+    /// if_data(u_int32 计数,单接口 ~4 GiB 即回绕),而 NET_RT_IFLIST2 的
+    /// RTM_IFINFO2 消息携带 if_data64(u_int64 计数,活动监视器同款),
+    /// 「开机以来累计」在正常使用中不回绕。消息按 ifm_msglen 步进,仅处理
+    /// RTM_IFINFO2;接口名取 ifm_addrs 位图中 RTAX_IFP 位的 sockaddr_dl
+    /// (sdl_data 前 sdl_nlen 字节,非零终止),sockaddr 按 4 字节 int 对齐步进;
+    /// 同名消息只保留首条,交 assembleTrafficCounters 复用同一套 en 白名单去重
+    /// 口径;两次 sysctl 失败或解析异常 → nil。
     public func traffic() -> NetworkTrafficCounters? {
-        var ifap: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&ifap) == 0, let first = ifap else { return nil }
-        defer { freeifaddrs(ifap) }
+        var mib: [Int32] = [CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0]
+        var length = 0
+        guard sysctl(&mib, u_int(mib.count), nil, &length, nil, 0) == 0, length > 0 else { return nil }
+        let buffer = UnsafeMutableRawPointer.allocate(byteCount: length,
+                                                      alignment: MemoryLayout<Int64>.alignment)
+        defer { buffer.deallocate() }
+        guard sysctl(&mib, u_int(mib.count), buffer, &length, nil, 0) == 0, length > 0 else { return nil }
         var byName: [String: (rx: Int64, tx: Int64)] = [:]
-        var cursor: UnsafeMutablePointer<ifaddrs>? = first
-        while let p = cursor {
-            let name = String(cString: p.pointee.ifa_name)
-            if let data = p.pointee.ifa_data, byName[name] == nil {
-                let counters = data.assumingMemoryBound(to: if_data.self).pointee
-                byName[name] = (Int64(counters.ifi_ibytes), Int64(counters.ifi_obytes))
+        let headerSize = MemoryLayout<if_msghdr2>.size
+        var offset = 0
+        while offset < length {
+            // 每条消息前 4 字节必在:msglen(u_short@0)与 type(u_char@3)
+            guard length - offset >= 4 else { return nil }
+            let msglen = Int(buffer.loadUnaligned(fromByteOffset: offset, as: UInt16.self))
+            guard msglen >= 4, offset + msglen <= length else { return nil }
+            if buffer.loadUnaligned(fromByteOffset: offset + 3, as: UInt8.self) == UInt8(RTM_IFINFO2),
+               msglen >= headerSize {
+                // 整头仅在 msglen ≥ sizeof 后整读,短消息(RTM_NEWMADDR2 等)不触碰
+                let ifm = buffer.loadUnaligned(fromByteOffset: offset, as: if_msghdr2.self)
+                let msgEnd = offset + msglen
+                var saOffset = offset + headerSize
+                // sockaddr 紧跟消息头,按 ifm_addrs 位序(RTAX 顺序)排布
+                for bit in 0..<RTAX_MAX where ifm.ifm_addrs & (1 << bit) != 0 {
+                    guard saOffset + 8 <= msgEnd else { return nil }
+                    if bit == RTAX_IFP {
+                        // if_dl.h 布局:u_char sdl_nlen@5、char sdl_data[12]@8;
+                        // 名字非零终止,只读 sdl_nlen 个字节(接口真名不可能超 12)
+                        let nlen = Int(buffer.loadUnaligned(fromByteOffset: saOffset + 5, as: UInt8.self))
+                        guard nlen > 0, nlen <= 12,
+                              saOffset + 8 + nlen <= msgEnd else { return nil }
+                        var nameBytes: [UInt8] = []
+                        nameBytes.reserveCapacity(nlen)
+                        for i in 0..<nlen {
+                            nameBytes.append(buffer.loadUnaligned(fromByteOffset: saOffset + 8 + i, as: UInt8.self))
+                        }
+                        let name = String(decoding: nameBytes, as: UTF8.self)
+                        // 同名消息(IPv4/IPv6 等地址族)只计首条:计数器是接口级同一份
+                        if byName[name] == nil {
+                            byName[name] = (Int64(bitPattern: ifm.ifm_data.ifi_ibytes),
+                                            Int64(bitPattern: ifm.ifm_data.ifi_obytes))
+                        }
+                    }
+                    // sa_len(u_char@0)为 0 的历史消息按 4 计,步进修圆到 int 对齐
+                    let saLen = Int(buffer.loadUnaligned(fromByteOffset: saOffset, as: UInt8.self))
+                    saOffset += (max(saLen, 4) + 3) & ~3
+                }
             }
-            cursor = p.pointee.ifa_next
+            offset += msglen
         }
         let entries = byName.map { (name: $0.key, rx: $0.value.rx, tx: $0.value.tx) }
         return assembleTrafficCounters(entries)
