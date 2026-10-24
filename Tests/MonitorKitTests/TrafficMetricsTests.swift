@@ -18,7 +18,7 @@ import MonitorKit
         #expect(counters == NetworkTrafficCounters(rxBytes: 100, txBytes: 10))
     }
 
-    // 同名去重:getifaddrs 同接口多地址族,只计首条,防双计
+    // 同名去重:sysctl 每接口恰一条,同名重复现采集中并不出现;去重保留为防御性约束(同名只计首条,防双计)
     @Test func deduplicatesSameNameEntries() {
         let counters = assembleTrafficCounters([
             (name: "en0", rx: 100, tx: 10),

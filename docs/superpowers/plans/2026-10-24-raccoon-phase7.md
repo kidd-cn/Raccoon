@@ -41,7 +41,7 @@
 - Produces(Task 2/3/4/5 依赖,签名逐字):
   - `public struct NetworkTrafficCounters: Equatable, Sendable { public let rxBytes: Int64; public let txBytes: Int64; public init(rxBytes: Int64, txBytes: Int64) }`(显式 memberwise:合成仅 internal,跨模块假体需构造,理由同 `NetworkStatus.init` 注释)
   - `public struct NetworkTraffic: Equatable, Sendable { public let receivedBytes: Int64; public let sentBytes: Int64; public let receivedBPS: Double?; public let sentBPS: Double?; public init(receivedBytes: Int64, sentBytes: Int64, receivedBPS: Double?, sentBPS: Double?) }`
-  - `public func assembleTrafficCounters(_ entries: [(name: String, rx: Int64, tx: Int64)]) -> NetworkTrafficCounters?` — 仅 `name.hasPrefix("en")` 参与统计;同名条目只计首条(getifaddrs 多地址族去重);求和;无匹配 → nil
+  - `public func assembleTrafficCounters(_ entries: [(name: String, rx: Int64, tx: Int64)]) -> NetworkTrafficCounters?` — 仅 `name.hasPrefix("en")` 参与统计;同名条目只计首条(按名去重为防御性约束);求和;无匹配 → nil
   - `public func assembleTraffic(current: NetworkTrafficCounters, previous: NetworkTrafficCounters, elapsedSeconds: TimeInterval) -> NetworkTraffic` — 累计 = current;任一维 delta < 0 该维钳 0;`elapsedSeconds <= 0` → 双维速率 nil(累计照常);否则 BPS = Double(delta) / elapsedSeconds
 
 - [ ] **Step 1: 写失败测试**(断言值逐字,1024 进制口径不在本任务,勿混入)
@@ -67,7 +67,7 @@ import MonitorKit
         #expect(counters == NetworkTrafficCounters(rxBytes: 100, txBytes: 10))
     }
 
-    // 同名去重:getifaddrs 同接口多地址族,只计首条,防双计
+    // 同名去重:sysctl 每接口恰一条,同名重复现采集中并不出现;去重保留为防御性约束(同名只计首条,防双计)
     @Test func deduplicatesSameNameEntries() {
         let counters = assembleTrafficCounters([
             (name: "en0", rx: 100, tx: 10),
@@ -119,7 +119,7 @@ import MonitorKit
 ```
 
 - [ ] **Step 2: 跑测试确认失败** — `Scripts/test.sh --filter TrafficMetricsTests`,预期编译错误「cannot find 'assembleTrafficCounters'」
-- [ ] **Step 3: 实现** `Sources/MonitorKit/TrafficMetrics.swift`,按 Produces 签名逐字;`assembleTrafficCounters` 用 `var seen = Set<String>()` 去重 + 求和;文档注释注明「真实 getifaddrs 采集不在本层」(与 `NetworkMetrics.swift:25` 注释口径一致)
+- [ ] **Step 3: 实现** `Sources/MonitorKit/TrafficMetrics.swift`,按 Produces 签名逐字;`assembleTrafficCounters` 用 `var seen = Set<String>()` 去重 + 求和;文档注释注明「真实 sysctl NET_RT_IFLIST2 采集不在本层」(与 `NetworkMetrics.swift:25` 注释口径一致)
 - [ ] **Step 4: 跑测试确认全绿** — 同 Step 2 命令
 - [ ] **Step 5: Commit** — `feat(traffic): MonitorKit 流量计数白名单去重与差分钳制`
 
