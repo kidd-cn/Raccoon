@@ -37,6 +37,10 @@ public final class MenuBarMonitorViewModel {
     private var lastNotified: [NotificationKind: Date]
     /// 上一次 CPU tick:首采样无基准时 computeCPULoad 返回 nil。
     private var previousTicks: [Int32]?
+    /// 流量差分基准及其采样时刻。与 CPU 基准「无条件前移」不同:流量基准只在
+    /// 成功采样拍前移(理由见 refreshFast 流量段注释)。
+    private var previousTraffic: NetworkTrafficCounters?
+    private var previousTrafficAt: Date?
     private var cpuRing = SampleRing<CPULoad>(capacity: 60)
     private var fastTask: Task<Void, Never>?
     private var slowTask: Task<Void, Never>?
@@ -111,7 +115,7 @@ public final class MenuBarMonitorViewModel {
         }
     }
 
-    /// 快频:memory + CPU。单项取不到时保留旧值,其余字段与 label 照常更新;
+    /// 快频:memory + CPU + 流量。单项取不到时保留旧值,其余字段与 label 照常更新;
     /// CPU 历史只在成功出点时追加,失败期间冻结(五期同语义,stop 亦保留数据)。
     public func refreshFast() {
         let memory = sampler.memory()
@@ -124,7 +128,26 @@ public final class MenuBarMonitorViewModel {
             // 基准无条件前移:无效区间(长度不符等)只丢当前点,下轮即恢复。
             previousTicks = current
         }
-        updateSnapshot(memory: memory, cpu: cpu)
+        // 流量差分与 CPU 基准的「无条件前移」语义不同:流量基准只在成功采样拍前移,
+        // 失败拍(nil)既不动快照也不动基准。理由:跨失败拍差分会把失败/休眠时长
+        // 摊进速率(失败期间虚低、恢复拍虚高),按「失败拍不可信」口径冻结展示,
+        // 恢复拍以上一次成功基准续算。
+        var traffic: NetworkTraffic?
+        if let current = sampler.traffic() {
+            // 只调一次 now():同一时刻既算 elapsed 又存基准,两次读取会注入序列错位。
+            let sampledAt = now()
+            if let previous = previousTraffic, let previousAt = previousTrafficAt {
+                traffic = assembleTraffic(
+                    current: current,
+                    previous: previous,
+                    elapsedSeconds: sampledAt.timeIntervalSince(previousAt)
+                )
+            }
+            // 无论是否已有基准都前移:首拍建立基准不出值,之后每成功拍续算。
+            previousTraffic = current
+            previousTrafficAt = sampledAt
+        }
+        updateSnapshot(memory: memory, cpu: cpu, traffic: traffic)
     }
 
     /// 慢频:卷 + 电池,再按冷却表评估通知。
@@ -257,14 +280,16 @@ public final class MenuBarMonitorViewModel {
         memory: MemoryStats? = nil,
         cpu: CPULoad? = nil,
         battery: BatteryInfo? = nil,
-        network: NetworkStatus? = nil
+        network: NetworkStatus? = nil,
+        traffic: NetworkTraffic? = nil
     ) {
         snapshot = MenuBarSnapshot(
             volumes: volumes ?? snapshot.volumes,
             memory: memory ?? snapshot.memory,
             cpu: cpu ?? snapshot.cpu,
             battery: battery ?? snapshot.battery,
-            network: network ?? snapshot.network
+            network: network ?? snapshot.network,
+            traffic: traffic ?? snapshot.traffic
         )
         recomputeLabel()
     }

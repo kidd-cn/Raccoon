@@ -14,6 +14,10 @@ final class MenuBarFakeSampler: SystemSampling, @unchecked Sendable {
 
     var memoryFails = false
     var cpuFails = false
+    // 可编程流量:方法覆盖协议的默认实现(extension 恒返 nil),光有存储属性不够。
+    // 与 memoryFails 同风格:两次 refreshFast 之间改值,无并发不加锁。
+    var trafficValue: NetworkTrafficCounters?
+    func traffic() -> NetworkTrafficCounters? { trafficValue }
     var volumesResult: [VolumeInfo] = [
         VolumeInfo(name: "Macintosh HD", totalBytes: 500, availableBytes: 100,
                    purgeableBytes: 50, isSystemDisk: true)
@@ -214,6 +218,20 @@ final class MutableClock: @unchecked Sendable {
     init(_ now: Date) { self.now = now }
 }
 
+/// 序列时钟:每次读取依序吐出下一个日期,读尽后停驻末位。
+/// 流量差分用例以「每次 refreshFast 恰消费一个日期」钉住实现里 now()
+/// 的单次调用——多调或漏调都会让 elapsed 错位而断言失败。
+final class DateSequenceClock: @unchecked Sendable {
+    private var dates: [Date]
+
+    init(_ dates: [Date]) { self.dates = dates }
+
+    var now: Date {
+        guard dates.count > 1 else { return dates[0] }
+        return dates.removeFirst()
+    }
+}
+
 // MARK: - 测试
 
 /// 冻结类用例用 60s 大间隔,只走手动 refresh 路径,不依赖真实计时;
@@ -230,11 +248,13 @@ final class MenuBarMonitorViewModelTests {
         sampler: MenuBarFakeSampler = MenuBarFakeSampler(),
         fast: TimeInterval = 60,
         slow: TimeInterval = 60,
-        clock: MutableClock? = nil
+        clock: MutableClock? = nil,
+        sequenceClock: DateSequenceClock? = nil
     ) -> MenuBarMonitorViewModel {
         let store = store ?? FakePreferenceStore(preferences: preferences)
         let date = fixedDate
         let box = clock
+        let seq = sequenceClock
         return MenuBarMonitorViewModel(
             sampler: sampler,
             preferences: store,
@@ -242,7 +262,7 @@ final class MenuBarMonitorViewModelTests {
             loginItem: loginItem,
             fastInterval: fast,
             slowInterval: slow,
-            now: { box?.now ?? date }
+            now: { seq?.now ?? (box?.now ?? date) }
         )
     }
 
@@ -552,6 +572,93 @@ final class MenuBarMonitorViewModelTests {
         sampler.cpuFails = false
         vm.refreshFast()
         #expect(vm.cpuHistory.count == 2)      // 基准未被 nil 采样污染,恢复即续点
+        vm.stop()
+    }
+
+    // 16. 流量:首拍无基准不出值;第二拍出累计+速率(序列时钟同时钉住 now() 单次调用)
+    @Test func trafficFirstTickAccumulatesWithoutRate() {
+        let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let sampler = MenuBarFakeSampler()
+        let c0 = NetworkTrafficCounters(rxBytes: 1_000, txBytes: 500)
+        let c1 = NetworkTrafficCounters(rxBytes: 11_000, txBytes: 5_500)
+        sampler.trafficValue = c0
+        let vm = makeVM(sampler: sampler,
+                        sequenceClock: DateSequenceClock([t0, t0.addingTimeInterval(5)]))
+
+        vm.refreshFast()
+        #expect(vm.snapshot.traffic == nil)    // 首拍无基准,不出值
+
+        sampler.trafficValue = c1
+        vm.refreshFast()
+        #expect(vm.snapshot.traffic != nil)
+        #expect(vm.snapshot.traffic?.receivedBytes == c1.rxBytes)   // 累计 = current
+        #expect(vm.snapshot.traffic?.sentBytes == c1.txBytes)
+        #expect(vm.snapshot.traffic?.receivedBPS == Double(c1.rxBytes - c0.rxBytes) / 5)
+        #expect(vm.snapshot.traffic?.sentBPS == Double(c1.txBytes - c0.txBytes) / 5)
+        vm.stop()
+    }
+
+    // 17. 流量:失败拍冻结快照(一字段不差)且基准不动;恢复拍以上次成功基准续算
+    @Test func trafficFailureFreezesPreviousSnapshotAndBaseline() {
+        let t0 = Date(timeIntervalSinceReferenceDate: 2_000_000)
+        let sampler = MenuBarFakeSampler()
+        let c0 = NetworkTrafficCounters(rxBytes: 1_000, txBytes: 100)
+        let c1 = NetworkTrafficCounters(rxBytes: 11_000, txBytes: 1_100)
+        // 失败拍不消费日期,序列恰为 [t0, t0+5, t0+10]
+        let vm = makeVM(sampler: sampler,
+                        sequenceClock: DateSequenceClock(
+                            [t0, t0.addingTimeInterval(5), t0.addingTimeInterval(10)]))
+
+        sampler.trafficValue = c0
+        vm.refreshFast()                       // tick1:基准建立,不出值
+        #expect(vm.snapshot.traffic == nil)
+
+        sampler.trafficValue = c1
+        vm.refreshFast()                       // tick2:出值,基准前移到 c1
+        #expect(vm.snapshot.traffic?.receivedBPS == Double(c1.rxBytes - c0.rxBytes) / 5)
+        #expect(vm.snapshot.traffic?.sentBPS == Double(c1.txBytes - c0.txBytes) / 5)
+        let tick2 = vm.snapshot.traffic
+
+        sampler.trafficValue = nil
+        vm.refreshFast()                       // tick3:失败拍 → 快照冻结,一字段不差
+        #expect(vm.snapshot.traffic == tick2)
+
+        sampler.trafficValue = c1
+        vm.refreshFast()                       // tick4:与前次成功拍同累计 → 0 速率,证明 nil 拍未动基准
+        #expect(vm.snapshot.traffic?.receivedBytes == c1.rxBytes)
+        #expect(vm.snapshot.traffic?.sentBytes == c1.txBytes)
+        #expect(vm.snapshot.traffic?.receivedBPS == 0)
+        #expect(vm.snapshot.traffic?.sentBPS == 0)
+        vm.stop()
+    }
+
+    // 18. 流量:时钟回拨 → 速率双维 nil、累计照出、基准照常前移;下一拍按 15s 差恢复
+    @Test func trafficClockRollbackYieldsNilRateButAdvancesBaseline() {
+        let t0 = Date(timeIntervalSinceReferenceDate: 3_000_000)
+        let sampler = MenuBarFakeSampler()
+        let c0 = NetworkTrafficCounters(rxBytes: 1_000, txBytes: 100)
+        let c1 = NetworkTrafficCounters(rxBytes: 2_000, txBytes: 200)
+        let c2 = NetworkTrafficCounters(rxBytes: 6_500, txBytes: 1_700)
+        let vm = makeVM(sampler: sampler,
+                        sequenceClock: DateSequenceClock(
+                            [t0, t0.addingTimeInterval(-10), t0.addingTimeInterval(5)]))
+
+        sampler.trafficValue = c0
+        vm.refreshFast()                       // tick1:基准 c0
+        #expect(vm.snapshot.traffic == nil)
+
+        sampler.trafficValue = c1
+        vm.refreshFast()                       // tick2:回拨 → 速率双维 nil,累计照出,基准前移
+        #expect(vm.snapshot.traffic?.receivedBPS == nil)
+        #expect(vm.snapshot.traffic?.sentBPS == nil)
+        #expect(vm.snapshot.traffic?.receivedBytes == c1.rxBytes)
+        #expect(vm.snapshot.traffic?.sentBytes == c1.txBytes)
+
+        sampler.trafficValue = c2
+        vm.refreshFast()                       // tick3:距回拨拍 15s,速率恢复
+        #expect(vm.snapshot.traffic?.receivedBPS == Double(c2.rxBytes - c1.rxBytes) / 15)
+        #expect(vm.snapshot.traffic?.sentBPS == Double(c2.txBytes - c1.txBytes) / 15)
+        #expect(vm.snapshot.traffic?.receivedBytes == c2.rxBytes)
         vm.stop()
     }
 }
