@@ -184,7 +184,9 @@ struct MonitorHomeView: View {
     }
 
     private var networkCard: some View {
-        MetricCard(title: loc("monitor.network.title"), icon: interfaceIcon(vm.network)) {
+        // 头部用固定类别图标,与 memoryCard(memorychip)/cpuCard(cpu)同款;
+        // 接口动态图标(wifi/wifi.slash/network)由内层状态行承担,避免同卡双 wifi。
+        MetricCard(title: loc("monitor.network.title"), icon: "network") {
             // 标题/图标映射共享 interfaceTitle/interfaceIcon:
             // nil → 「暂不可用」+ network,离线 → 「离线」+ wifi.slash,与原分支语义一致。
             Label(interfaceTitle(vm.network), systemImage: interfaceIcon(vm.network))
