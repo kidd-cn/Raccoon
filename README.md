@@ -155,7 +155,7 @@ CI:GitHub Actions(`macos-latest`)跑 `swift build` + `Scripts/test.sh` + L10n �
 | 四期 | 磁盘分析(treemap)                   | ✅ 已实现(待人工 QA) |
 | 五期 | 状态监控 + 系统优化                     | ✅ 已实现(待人工 QA) |
 | 六期 | 菜单栏工具集                          | ✅ 已实现(人工 QA 完成) |
-| 七期 | 网络流量显示                          | ✅ 已实现(待人工 QA) |
+| 七期 | 网络流量显示                              | ✅ 已实现(人工 QA 完成)|
 
 后续每期独立走 spec → 计划 → 实现 流程;一期的架构(侧边栏骨架、规则库、ScanKit/CleanKit 拆分)为后续所有期次提供地基。
 
