@@ -32,10 +32,11 @@ public struct NetworkTraffic: Equatable, Sendable {
 
 /// 纯组装:白名单累加接口计数条目。仅 `en*` 物理接口参与——
 /// lo/utun/ipsec/awdl/llw/ap/bridge 等会与真实网卡双计(VPN 隧道、
-/// 链路本地副本、桥接扇出),全部排除。同名接口只计首条:采集层
-/// 对同一接口按地址族(IPv4/IPv6 等)可能给出多条,计数却是接口级
-/// 同一份,累加会翻倍。无任何匹配返回 nil。真实 sysctl NET_RT_IFLIST2
-/// 采集不在本层(见 AppCore LiveSystemSampler)。
+/// 链路本地副本、桥接扇出),全部排除。同名接口只计首条:sysctl
+/// NET_RT_IFLIST2 采集每接口恰一条 RTM_IFINFO2 消息,同名重复在
+/// 现采集中并不出现;按名去重保留为纯函数层的防御性约束(采集层
+/// 若给出同名条目,只计首条,累加即翻倍)。无任何匹配返回 nil。
+/// 真实 sysctl NET_RT_IFLIST2 采集不在本层(见 AppCore LiveSystemSampler)。
 public func assembleTrafficCounters(_ entries: [(name: String, rx: Int64, tx: Int64)]) -> NetworkTrafficCounters? {
     var seen = Set<String>()
     var rx: Int64 = 0

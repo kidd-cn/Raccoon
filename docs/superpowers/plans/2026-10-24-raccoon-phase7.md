@@ -4,9 +4,9 @@
 
 **Goal:** 网络指标从「仅连通性」升级为「连通性 + 实时速率(↓/↑)+ 自开机以来累计收发」,落地菜单栏标签、菜单栏面板、五期监控页三处。
 
-**Architecture:** 沿既有分层——MonitorKit 纯函数(接口白名单/去重/差分钳制)→ AppCore 采集壳(getifaddrs,零权限)与双 VM 差分状态 → MenuBarKit 快照与短格式 → Raccoon UI 渲染与 L10n。速率由 VM 快循环两次采样差分得出;累计直接取接口计数器(自开机以来,无持久化)。
+**Architecture:** 沿既有分层——MonitorKit 纯函数(接口白名单/去重/差分钳制)→ AppCore 采集壳(sysctl NET_RT_IFLIST2,零权限)与双 VM 差分状态 → MenuBarKit 快照与短格式 → Raccoon UI 渲染与 L10n。速率由 VM 快循环两次采样差分得出;累计直接取接口计数器(自开机以来,无持久化)。
 
-**Tech Stack:** Swift 6 / SwiftUI(macOS 14+,CLT-only 工具链)/ Swift Testing / getifaddrs(2)。
+**Tech Stack:** Swift 6 / SwiftUI(macOS 14+,CLT-only 工具链)/ Swift Testing / sysctl NET_RT_IFLIST2。
 
 **Spec:** `docs/superpowers/specs/2026-10-24-raccoon-phase7-design.md`
 
@@ -123,7 +123,7 @@ import MonitorKit
 - [ ] **Step 4: 跑测试确认全绿** — 同 Step 2 命令
 - [ ] **Step 5: Commit** — `feat(traffic): MonitorKit 流量计数白名单去重与差分钳制`
 
-### Task 2: AppCore 采集壳与协议扩展(getifaddrs)
+### Task 2: AppCore 采集壳与协议扩展(sysctl NET_RT_IFLIST2)
 
 **Files:**
 - Modify: `Sources/AppCore/MonitorViewModel.swift`(SystemSampling 协议 ~:11 加要求 + 默认实现;`LiveSystemSampler` ~:166 加覆盖实现)
