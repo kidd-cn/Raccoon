@@ -13,6 +13,10 @@ final class FakeSampler: SystemSampling, @unchecked Sendable {
     private var tickCalls = 0
     var memoryFails = false
     var cpuFails = false
+    // 可编程流量:方法覆盖协议的默认实现(extension 恒返 nil),光有存储属性不够。
+    // 与 memoryFails 同风格:两次 refreshFast 之间改值,无并发不加锁。
+    var trafficValue: NetworkTrafficCounters?
+    func traffic() -> NetworkTrafficCounters? { trafficValue }
 
     /// cpuTicks 累计调用次数(验证轮询循环条数,如 start 幂等)。
     var tickCallCount: Int { lock.withLock { tickCalls } }
@@ -50,10 +54,13 @@ final class FakeSampler: SystemSampling, @unchecked Sendable {
 @Suite @MainActor
 final class MonitorViewModelTests {
     private func makeVM(memoryFails: Bool = false,
-                        fast: TimeInterval = 60, slow: TimeInterval = 60) -> (vm: MonitorViewModel, sampler: FakeSampler) {
+                        fast: TimeInterval = 60, slow: TimeInterval = 60,
+                        sequenceClock: DateSequenceClock? = nil) -> (vm: MonitorViewModel, sampler: FakeSampler) {
         let sampler = FakeSampler()
         sampler.memoryFails = memoryFails
-        return (MonitorViewModel(sampler: sampler, fastInterval: fast, slowInterval: slow), sampler)
+        let seq = sequenceClock
+        return (MonitorViewModel(sampler: sampler, fastInterval: fast, slowInterval: slow,
+                                 now: { seq?.now ?? Date(timeIntervalSinceReferenceDate: 0) }), sampler)
     }
 
     @Test func startSetsRunningAndIsIdempotent() async throws {
@@ -185,5 +192,106 @@ final class MonitorViewModelTests {
         let status = NetworkStatus(online: true, interface: .wifi)
         vm.setNetwork(status)
         #expect(vm.network == status)
+    }
+
+    // MARK: - 流量差分(七期 Task 5,与六期 MenuBar VM 同构;时钟复用本 target 的 DateSequenceClock)
+
+    // 1. 流量:首拍无基准不出值;第二拍出累计+速率
+    @Test func trafficFirstTickAccumulatesWithoutRate() {
+        let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let (vm, sampler) = makeVM(sequenceClock: DateSequenceClock([t0, t0.addingTimeInterval(5)]))
+        let c0 = NetworkTrafficCounters(rxBytes: 1_000, txBytes: 500)
+        let c1 = NetworkTrafficCounters(rxBytes: 11_000, txBytes: 5_500)
+
+        sampler.trafficValue = c0
+        vm.refreshFast()
+        #expect(vm.traffic == nil)             // 首拍无基准,不出值
+
+        sampler.trafficValue = c1
+        vm.refreshFast()
+        #expect(vm.traffic?.receivedBytes == c1.rxBytes)   // 累计 = current
+        #expect(vm.traffic?.sentBytes == c1.txBytes)
+        #expect(vm.traffic?.receivedBPS == Double(c1.rxBytes - c0.rxBytes) / 5)
+        #expect(vm.traffic?.sentBPS == Double(c1.txBytes - c0.txBytes) / 5)
+    }
+
+    // 2. 流量:失败拍冻结旧值(全字段一字不差)且基准不动;恢复拍同累计 → 0 速率
+    @Test func trafficFailureFreezesPreviousSnapshotAndBaseline() {
+        let t0 = Date(timeIntervalSinceReferenceDate: 2_000_000)
+        // 失败拍不消费日期,序列恰为 [t0, t0+5, t0+10](三个成功拍各恰读一次)
+        let (vm, sampler) = makeVM(sequenceClock: DateSequenceClock(
+            [t0, t0.addingTimeInterval(5), t0.addingTimeInterval(10)]))
+        let c0 = NetworkTrafficCounters(rxBytes: 1_000, txBytes: 100)
+        let c1 = NetworkTrafficCounters(rxBytes: 11_000, txBytes: 1_100)
+
+        sampler.trafficValue = c0
+        vm.refreshFast()                       // tick1:基准建立,不出值
+        #expect(vm.traffic == nil)
+
+        sampler.trafficValue = c1
+        vm.refreshFast()                       // tick2:出值,基准前移到 c1
+        #expect(vm.traffic?.receivedBPS == Double(c1.rxBytes - c0.rxBytes) / 5)
+        #expect(vm.traffic?.sentBPS == Double(c1.txBytes - c0.txBytes) / 5)
+        let tick2 = vm.traffic
+
+        sampler.trafficValue = nil
+        vm.refreshFast()                       // tick3:失败拍 → 冻结 tick2 结果,一字段不差
+        #expect(vm.traffic == tick2)
+
+        sampler.trafficValue = c1
+        vm.refreshFast()                       // tick4:与前次成功拍同累计 → 0 速率,证明 nil 拍未动基准
+        #expect(vm.traffic?.receivedBytes == c1.rxBytes)
+        #expect(vm.traffic?.sentBytes == c1.txBytes)
+        #expect(vm.traffic?.receivedBPS == 0)
+        #expect(vm.traffic?.sentBPS == 0)
+    }
+
+    // 3. 流量:时钟回拨 → 速率双维 nil、累计照出、基准照常前移;下一拍按 15s 差恢复
+    @Test func trafficClockRollbackYieldsNilRateButAdvancesBaseline() {
+        let t0 = Date(timeIntervalSinceReferenceDate: 3_000_000)
+        let (vm, sampler) = makeVM(sequenceClock: DateSequenceClock(
+            [t0, t0.addingTimeInterval(-10), t0.addingTimeInterval(5)]))
+        let c0 = NetworkTrafficCounters(rxBytes: 1_000, txBytes: 100)
+        let c1 = NetworkTrafficCounters(rxBytes: 2_000, txBytes: 200)
+        let c2 = NetworkTrafficCounters(rxBytes: 6_500, txBytes: 1_700)
+
+        sampler.trafficValue = c0
+        vm.refreshFast()                       // tick1:基准 c0
+        #expect(vm.traffic == nil)
+
+        sampler.trafficValue = c1
+        vm.refreshFast()                       // tick2:回拨(elapsed = -10)→ 速率双维 nil,累计照出,基准前移
+        #expect(vm.traffic?.receivedBPS == nil)
+        #expect(vm.traffic?.sentBPS == nil)
+        #expect(vm.traffic?.receivedBytes == c1.rxBytes)
+        #expect(vm.traffic?.sentBytes == c1.txBytes)
+
+        sampler.trafficValue = c2
+        vm.refreshFast()                       // tick3:距回拨拍 15s,速率恢复
+        #expect(vm.traffic?.receivedBPS == Double(c2.rxBytes - c1.rxBytes) / 15)
+        #expect(vm.traffic?.sentBPS == Double(c2.txBytes - c1.txBytes) / 15)
+        #expect(vm.traffic?.receivedBytes == c2.rxBytes)
+    }
+
+    // 4. 流量段在 cpuTicks 失败提前返回之前:CPU 全程失败不断流,流量照常差分
+    @Test func trafficAdvancesWhileCPUBroken() {
+        let t0 = Date(timeIntervalSinceReferenceDate: 4_000_000)
+        let (vm, sampler) = makeVM(sequenceClock: DateSequenceClock([t0, t0.addingTimeInterval(5)]))
+        sampler.cpuFails = true                // 全程 CPU 失败
+        let c0 = NetworkTrafficCounters(rxBytes: 10_000, txBytes: 2_000)
+        let c1 = NetworkTrafficCounters(rxBytes: 20_000, txBytes: 3_000)
+
+        sampler.trafficValue = c0
+        vm.refreshFast()                       // tick1:流量建基准;CPU 失败第 1 次(瞬时抖动口径)
+        #expect(vm.traffic == nil)
+
+        sampler.trafficValue = c1
+        vm.refreshFast()                       // tick2:流量出速率;CPU 连续两次失败 → 暂不可用
+        #expect(vm.traffic?.receivedBytes == c1.rxBytes)
+        #expect(vm.traffic?.sentBytes == c1.txBytes)
+        #expect(vm.traffic?.receivedBPS == Double(c1.rxBytes - c0.rxBytes) / 5)
+        #expect(vm.traffic?.sentBPS == Double(c1.txBytes - c0.txBytes) / 5)
+        #expect(vm.cpuUnavailable == true)     // CPU 自身语义未被扰动:连续两次失败 → 暂不可用
+        #expect(vm.cpuHistory.isEmpty)         // CPU 失败不入历史:流量接入未写脏 CPU 路径
     }
 }

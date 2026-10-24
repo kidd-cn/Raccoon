@@ -41,6 +41,8 @@ public final class MonitorViewModel {
     public private(set) var memory: MemoryStats?
     public private(set) var battery: BatteryInfo?
     public private(set) var network: NetworkStatus?
+    /// 本拍流量:累计 + 可选速率;失败拍冻结旧值。
+    public private(set) var traffic: NetworkTraffic?
     /// CPU 历史曲线:内部为 SampleRing(容量 60,溢出弃最旧),最旧在前;
     /// 只读投影(存储在 ring 里,外部不可直接改写)。
     public var cpuHistory: [CPULoad] { ring.values }
@@ -51,6 +53,8 @@ public final class MonitorViewModel {
     private let sampler: SystemSampling
     private let fastInterval: TimeInterval
     private let slowInterval: TimeInterval
+    /// 注入时钟:流量成功拍恰读一次(elapsed 与基准存储共用同一时刻)。
+    private let now: @Sendable () -> Date
 
     /// 曾 start 过(区别于「循环在跑」):setActive 暂停后据此决定能否重启。
     private var started = false
@@ -59,14 +63,20 @@ public final class MonitorViewModel {
     /// 上一次 CPU tick 快照:computeCPULoad 的差值基准,暂停/停止不清空,
     /// 恢复后首个采样即可继续出点。
     private var previousTicks: [Int32]?
+    /// 流量差分基准及其采样时刻。与 CPU 基准「无条件前移」不同:流量基准只在
+    /// 成功采样拍前移(理由见 refreshFast 流量段注释)。
+    private var previousTraffic: NetworkTrafficCounters?
+    private var previousTrafficAt: Date?
     private var ring = SampleRing<CPULoad>(capacity: 60)
     /// cpuTicks() 连续失败次数:单次失败可能只是瞬时抖动,连续两次才判「暂不可用」。
     private var cpuFailureCount = 0
 
-    public init(sampler: SystemSampling, fastInterval: TimeInterval = 2, slowInterval: TimeInterval = 30) {
+    public init(sampler: SystemSampling, fastInterval: TimeInterval = 2, slowInterval: TimeInterval = 30,
+                now: @escaping @Sendable () -> Date = Date.init) {
         self.sampler = sampler
         self.fastInterval = fastInterval
         self.slowInterval = slowInterval
+        self.now = now
     }
 
     /// 幂等:已 running/ready 不重复建循环;phase → running。
@@ -95,11 +105,32 @@ public final class MonitorViewModel {
         }
     }
 
-    /// 快频采样:cpu + memory。首采样无基准(computeCPULoad 返回 nil)不入历史;
-    /// memory()/cpuTicks() 返回 nil 时该指标保持旧值,其余照常。
+    /// 快频采样:memory + 流量 + cpu。首采样无基准(computeCPULoad 返回 nil)不入历史;
+    /// memory()/traffic()/cpuTicks() 返回 nil 时该指标保持旧值,其余照常。
     public func refreshFast() {
         if let stats = sampler.memory() {
             memory = stats
+        }
+        // 流量段刻意位于 cpuTicks 失败提前返回之前:cpuTicks 连续失败会在下方 guard
+        // 处提前 return,流量若排在其后,「CPU 暂不可用」期间会一并断流。单指标
+        // 隔离(见 SystemSampling 顶部注释)要求 CPU 失败不拖垮流量。
+        // 流量差分与 CPU 基准的「无条件前移」语义不同:流量基准只在成功采样拍前移,
+        // 失败拍(nil)既不动 traffic 也不动基准。理由:跨失败拍差分会把失败/休眠
+        // 时长摊进速率(失败期间虚低、恢复拍虚高),按「失败拍不可信」口径冻结
+        // 展示,恢复拍以上一次成功基准续算。
+        if let current = sampler.traffic() {
+            // 只调一次 now():同一时刻既算 elapsed 又存基准,两次读取会注入序列错位。
+            let sampledAt = now()
+            if let previous = previousTraffic, let previousAt = previousTrafficAt {
+                traffic = assembleTraffic(
+                    current: current,
+                    previous: previous,
+                    elapsedSeconds: sampledAt.timeIntervalSince(previousAt)
+                )
+            }
+            // 无论是否已有基准都前移:首拍建立基准不出值,之后每成功拍续算。
+            previousTraffic = current
+            previousTrafficAt = sampledAt
         }
         guard let current = sampler.cpuTicks() else {
             cpuFailureCount += 1
