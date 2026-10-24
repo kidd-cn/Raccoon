@@ -139,6 +139,9 @@
 "monitor.network.wired" = "有线网络";
 "monitor.network.other" = "网络";
 "monitor.network.offline" = "离线";
+"monitor.network.pending" = "正在采集速率…";
+"monitor.network.received" = "收";
+"monitor.network.sent" = "发";
 "monitor.suggest.disk" = "磁盘空间不足";
 "monitor.suggest.snapshots" = "本地快照可回收";
 "monitor.suggest.launchitems" = "审查开机自启项";
@@ -155,6 +158,7 @@
 "menubar.panel.metric" = "菜单栏指标";
 "menubar.panel.quickActions" = "快捷入口";
 "menubar.panel.disk.accessibility" = "磁盘已用 %@";
+"menubar.panel.network.totals" = "收 %@ / 发 %@";
 "menubar.metric.disk" = "磁盘";
 "menubar.metric.memory" = "内存";
 "menubar.metric.cpu" = "CPU";

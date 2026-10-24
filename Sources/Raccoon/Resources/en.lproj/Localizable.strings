@@ -139,6 +139,9 @@
 "monitor.network.wired" = "Ethernet";
 "monitor.network.other" = "Network";
 "monitor.network.offline" = "Offline";
+"monitor.network.pending" = "Sampling rate…";
+"monitor.network.received" = "Received";
+"monitor.network.sent" = "Sent";
 "monitor.suggest.disk" = "Disk space is running low";
 "monitor.suggest.snapshots" = "Local snapshots can be reclaimed";
 "monitor.suggest.launchitems" = "Review login items";
@@ -155,6 +158,7 @@
 "menubar.panel.metric" = "Menu Bar Metric";
 "menubar.panel.quickActions" = "Quick Actions";
 "menubar.panel.disk.accessibility" = "Disk used %@";
+"menubar.panel.network.totals" = "Recv %@ / Sent %@";
 "menubar.metric.disk" = "Disk";
 "menubar.metric.memory" = "Memory";
 "menubar.metric.cpu" = "CPU";

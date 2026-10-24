@@ -179,6 +179,18 @@ struct MenuBarPanelView: View {
                 // 在线/离线标题与图标共用共享 helper,与标签、监控页同口径。
                 Label(interfaceTitle(network), systemImage: interfaceIcon(network))
                     .font(.callout)
+                // 与磁盘节 purgeable 同口径:流量未采集(首拍前)不占行。
+                if let traffic = vm.snapshot.traffic {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("↓ \(rateText(traffic.receivedBPS)) ↑ \(rateText(traffic.sentBPS))")
+                            .font(.callout)
+                        Text(loc("menubar.panel.network.totals",
+                                 byteText(traffic.receivedBytes), byteText(traffic.sentBytes)))
+                            .font(.callout)
+                    }
+                    // 合并朗读:接口标题起、速率居中、累计行收尾,与视觉顺序一致。
+                    .accessibilityElement(children: .combine)
+                }
             } else {
                 unavailable
             }
@@ -269,5 +281,11 @@ struct MenuBarPanelView: View {
         if battery.charging { return loc("monitor.battery.charging") }
         if battery.onBattery { return loc("monitor.battery.onbattery") }
         return loc("monitor.battery.external")
+    }
+
+    /// 速率文本:无值(首拍/失败拍)显示采集占位;有值按既有 byteText 口径 + "/s"。
+    private func rateText(_ bps: Double?) -> String {
+        guard let bps else { return loc("monitor.network.pending") }
+        return byteText(Int64(max(0, bps))) + "/s"
     }
 }
