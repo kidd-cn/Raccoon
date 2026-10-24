@@ -35,9 +35,9 @@ public enum MenuBarLabelFormatter {
     }
 
     /// 速率短格式(菜单栏窄空间):1024 进制、单位单字符无空格、
-    /// ≥1K 统一一位小数(String(format:) 恒为点号,不做本地化);负值按 0 计。
+    /// ≥1K 统一一位小数(String(format:) 恒为点号,不做本地化);负值/非有限值按 0 计。
     public static func shortBytesPerSecond(_ bps: Double) -> String {
-        let value = max(0, bps)
+        let value = bps.isFinite ? max(0, bps) : 0
         guard value >= 1024 else { return "\(Int(value))B" }
         let kb = value / 1024
         guard kb >= 1024 else { return String(format: "%.1fK", kb) }

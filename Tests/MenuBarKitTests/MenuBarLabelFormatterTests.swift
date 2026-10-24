@@ -168,7 +168,9 @@ import MenuBarKit
             volumes: [volume(total: 500, available: 200)],
             memory: memory(total: 200, used: 125),
             cpu: cpu(user: 12.4, system: 5.4),
-            network: NetworkStatus(online: true, interface: .wired)
+            network: NetworkStatus(online: true, interface: .wired),
+            // traffic 完整时 iconOnly 仍须 .none:样式 guard 先于 metric 分派,结构性质。
+            traffic: NetworkTraffic(receivedBytes: 1, sentBytes: 2, receivedBPS: 1536, sentBPS: 512)
         )
         for metric in MenuBarMetric.allCases {
             let label = MenuBarLabelFormatter.label(
