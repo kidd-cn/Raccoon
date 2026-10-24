@@ -291,7 +291,7 @@ final class MonitorViewModelTests {
         #expect(vm.traffic?.sentBytes == c1.txBytes)
         #expect(vm.traffic?.receivedBPS == Double(c1.rxBytes - c0.rxBytes) / 5)
         #expect(vm.traffic?.sentBPS == Double(c1.txBytes - c0.txBytes) / 5)
-        #expect(vm.cpuUnavailable == true)     // CPU 自身语义未被扰动:连续两次失败 → 暂不可用
+        #expect(vm.cpuUnavailable)             // CPU 自身语义未被扰动:连续两次失败 → 暂不可用
         #expect(vm.cpuHistory.isEmpty)         // CPU 失败不入历史:流量接入未写脏 CPU 路径
     }
 }

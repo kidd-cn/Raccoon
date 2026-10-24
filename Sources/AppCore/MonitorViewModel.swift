@@ -111,7 +111,7 @@ public final class MonitorViewModel {
         if let stats = sampler.memory() {
             memory = stats
         }
-        // 流量段刻意位于 cpuTicks 失败提前返回之前:cpuTicks 连续失败会在下方 guard
+        // 流量段刻意位于 cpuTicks 失败提前返回之前:cpuTicks 一旦失败即会在下方 guard
         // 处提前 return,流量若排在其后,「CPU 暂不可用」期间会一并断流。单指标
         // 隔离(见 SystemSampling 顶部注释)要求 CPU 失败不拖垮流量。
         // 流量差分与 CPU 基准的「无条件前移」语义不同:流量基准只在成功采样拍前移,
