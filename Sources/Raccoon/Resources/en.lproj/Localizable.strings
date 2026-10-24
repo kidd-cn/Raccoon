@@ -142,6 +142,7 @@
 "monitor.network.pending" = "Sampling rate…";
 "monitor.network.received" = "Received";
 "monitor.network.sent" = "Sent";
+"monitor.network.title" = "Network";
 "monitor.suggest.disk" = "Disk space is running low";
 "monitor.suggest.snapshots" = "Local snapshots can be reclaimed";
 "monitor.suggest.launchitems" = "Review login items";

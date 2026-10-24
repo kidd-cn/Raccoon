@@ -184,11 +184,21 @@ struct MonitorHomeView: View {
     }
 
     private var networkCard: some View {
-        // 标题/图标映射共享 interfaceTitle/interfaceIcon:
-        // nil → 「暂不可用」+ network,离线 → 「离线」+ wifi.slash,与原分支语义一致。
-        StatusCard(icon: interfaceIcon(vm.network),
-                   title: interfaceTitle(vm.network),
-                   detail: nil)
+        MetricCard(title: loc("monitor.network.title"), icon: interfaceIcon(vm.network)) {
+            // 标题/图标映射共享 interfaceTitle/interfaceIcon:
+            // nil → 「暂不可用」+ network,离线 → 「离线」+ wifi.slash,与原分支语义一致。
+            Label(interfaceTitle(vm.network), systemImage: interfaceIcon(vm.network))
+                .font(.callout)
+            // 与面板速率行同款:流量未采集(首拍/失败拍)时速率与累计整体不占行,
+            // 状态行照常在(单指标失败隔离,与内存卡口径一致)。
+            if let traffic = vm.traffic {
+                Text("↓ \(rateText(traffic.receivedBPS)) ↑ \(rateText(traffic.sentBPS))")
+                    .font(.callout)
+                    .monospacedDigit()
+                metricRow(loc("monitor.network.received"), byteText(traffic.receivedBytes))
+                metricRow(loc("monitor.network.sent"), byteText(traffic.sentBytes))
+            }
+        }
     }
 
     // MARK: - 建议卡

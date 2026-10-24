@@ -283,11 +283,4 @@ struct MenuBarPanelView: View {
         if battery.onBattery { return loc("monitor.battery.onbattery") }
         return loc("monitor.battery.external")
     }
-
-    /// 速率文本:无值(首拍/失败拍)显示采集占位;有值按既有 byteText 口径 + "/s"。
-    /// 差分层已钳 0 且结构上有限;NaN 经归零兜底,与 MenuBarLabelFormatter.shortBytesPerSecond 同口径;inf 若不设防会令 Int64 陷阱。
-    private func rateText(_ bps: Double?) -> String {
-        guard let bps else { return loc("monitor.network.pending") }
-        return byteText(Int64(bps.isFinite ? max(0, bps) : 0)) + "/s"
-    }
 }

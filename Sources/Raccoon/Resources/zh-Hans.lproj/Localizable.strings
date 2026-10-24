@@ -142,6 +142,7 @@
 "monitor.network.pending" = "正在采集速率…";
 "monitor.network.received" = "收";
 "monitor.network.sent" = "发";
+"monitor.network.title" = "网络";
 "monitor.suggest.disk" = "磁盘空间不足";
 "monitor.suggest.snapshots" = "本地快照可回收";
 "monitor.suggest.launchitems" = "审查开机自启项";
