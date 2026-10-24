@@ -17,7 +17,7 @@
 
 ## 2. 数据口径
 
-- **采集**:`getifaddrs(2)`,零权限。每接口 `ifa_data → if_data` 的 `ifi_ibytes`/`ifi_obytes` 为自接口 up 以来的累计字节。
+- **采集**:`sysctl(CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0)`,零权限;每接口 `if_data64` 的 `ifd_ibytes`/`ifd_obytes` 为自接口 up 以来的 64 位累计字节(活动监视器同款数据源)。不用 `getifaddrs(2)`:其 AF_LINK 条目的 `if_data` 计数器为 32 位(u_int32_t),单接口约 4 GiB 即回绕,撑不住「自开机以来累计」口径。
 - **接口白名单**:仅统计名字以 `en` 开头的接口(Wi-Fi/以太网/USB 网卡/iPhone USB 共享皆为 `en*`)。天然排除 loopback(`lo0`)、VPN 隧道(`utun*`/`ipsec*`)、AirDrop 链路(`awdl0`/`llw0`)、热点(`ap1`)等。VPN 场景下即物理链路实际传输量,避免隧道双计。与活动监视器(全接口求和)数字可以有差,以本口径为准并在 QA 清单注明。
 - **按接口名去重**:`getifaddrs` 对同一接口会返回多条(不同地址族),`if_data` 是接口级计数,同名只取一次,防双计。
 - **差分与钳制**(纯函数):任一字节 delta < 0(接口重置、驱动重载)→ 该维度 delta 钳 0,速率照常出(累计维度如实反映计数器现状);`elapsed ≤ 0`(同拍/时钟回拨)→ 速率两维 nil,累计照常显示。
@@ -34,7 +34,7 @@
   - 纯过滤:`assembleTrafficCounters(_ entries: [(name: String, rx: Int64, tx: Int64)]) -> NetworkTrafficCounters?` — 输入已摊平的接口条目(便于测试),内部做 `en` 前缀白名单 + 按名去重;无匹配接口 → nil
   - 纯差分:`assembleTraffic(current: NetworkTrafficCounters, previous: NetworkTrafficCounters, elapsedSeconds: TimeInterval) -> NetworkTraffic` — 输出累计(即 current)+ 双维速率;elapsed ≤ 0 → 速率两维 nil(累计仍出)
 - **AppCore**:
-  - `SystemSampling` 协议加 `func traffic() -> NetworkTrafficCounters?`,以 extension 默认实现返回 nil(五期所有既有测试假体零改动不破);`LiveSystemSampler` 覆盖真实实现(getifaddrs 遍历 + ifa_data 读取;系统调用失败 → nil)
+  - `SystemSampling` 协议加 `func traffic() -> NetworkTrafficCounters?`,以 extension 默认实现返回 nil(五期所有既有测试假体零改动不破);`LiveSystemSampler` 覆盖真实实现(sysctl NET_RT_IFLIST2 遍历 + RTM_IFINFO2 消息解析 + sockaddr_dl 名字提取;系统调用失败或解析异常 → nil)
   - `MenuBarMonitorViewModel`(六期):refreshFast 每拍采样;私有 `previousCounters`/`previousAt` 差分记忆;`updateSnapshot(traffic:)`;首拍速率 nil
   - `MonitorViewModel`(五期):快循环(2s)同样接入;新增 `private(set) var traffic: NetworkTraffic?`
 - **MenuBarKit**:

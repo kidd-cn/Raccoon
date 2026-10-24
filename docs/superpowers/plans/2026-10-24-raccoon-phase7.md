@@ -24,7 +24,7 @@
 
 1. **休眠唤醒首拍**:跨休眠差分 ÷ 墙钟间隔,首拍速率失真——期望:下一拍自愈,不崩不错持续(人工 QA;VM 侧以「elapsed ≤ 0 → 速率 nil」兜住时钟回拨一类)。→ T4/T5 测时钟回拨,真休眠归人工。
 2. **VPN/虚拟接口双计**:口径 = 仅 `en*`;期望:开 VPN 后数字 ≈ 物理链路实际字节,不翻倍(人工 QA 对照活动监视器时须先讲明口径差异)。→ T1 白名单测试 + T8 QA 清单注明。
-3. **getifaddrs 失败/空**:无 `en*` 接口或系统调用失败 → `traffic()` 返回 nil;期望:快照冻结旧值、UI 不误报 0 流量。→ T1 空输入测试 + T2 代码审。
+3. **采集失败/空**:无 `en*` 接口或 sysctl 失败/解析异常 → `traffic()` 返回 nil;期望:快照冻结旧值、UI 不误报 0 流量。→ T1 空输入测试 + T2 代码审。
 4. **计数器重置/接口插拔**:USB 网卡拔插、驱动重载致 delta < 0;期望:该维钳 0,不出现负速率/负累计。→ T1/T4/T5 钳制测试。
 5. **菜单栏窄空间**:速率文本 `↓999B ↑12.3M` 随长度变化;期望:系统截断时图标仍在,不挤压崩溃(iconOnly 样式完全不受影响)。→ 人工 QA(T6 保持现有 iconOnly 分支零改动)。
 
@@ -132,10 +132,10 @@ import MonitorKit
 - Consumes: Task 1 的 `NetworkTrafficCounters`/`assembleTrafficCounters`
 - Produces(Task 4/5 依赖):
   - `SystemSampling` 协议新增 `func traffic() -> NetworkTrafficCounters?`,并配 `public extension SystemSampling { func traffic() -> NetworkTrafficCounters? { nil } }` 默认实现——注释写明:默认 nil 使五期既有测试假体零改动兼容,真覆盖在 LiveSystemSampler
-  - `LiveSystemSampler.traffic()`:getifaddrs 遍历 → `[(name, rx, tx)]` 摊平(同名首条;仅读 `ifa_data as if_data` 的 `ifi_ibytes/ifi_obytes`;`ifa_data` 为 nil 的条目跳过)→ `assembleTrafficCounters`;系统调用失败或无 en 接口 → nil。薄壳不单测(注释同 `volumes()` 口径),需 `import Darwin`
+  - `LiveSystemSampler.traffic()`:`sysctl(NET_RT_IFLIST2)` 一次性快照(64 位 `if_data64`,活动监视器同款)→ 解析 `RTM_IFINFO2`/`if_msghdr2`,接口名取自 RTAX_IFP 的 `sockaddr_dl` → `[(name, rx, tx)]` 摊平 → `assembleTrafficCounters`;系统调用失败/解析异常/无 en 接口 → nil。薄壳不单测(注释同 `volumes()` 口径)。**执行注记:首版曾用 getifaddrs(提交 `878941a`),因 AF_LINK 的 `if_data` 计数器为 32 位(单接口 ~4 GiB 回绕,撑不住累计口径)改为 sysctl NET_RT_IFLIST2**
 
 - [ ] **Step 1: 协议加要求 + extension 默认实现**(要求本体与默认实现放一起,注释说明兼容动机)
-- [ ] **Step 2: LiveSystemSampler 覆盖** — `getifaddrs(&ifap)` == 0 才继续,`defer { freeifaddrs(ifap) }`;`UnsafeMutablePointer<ifaddrs>` 链表步进 `ifa_next`;`String(cString:)` 取名;`assumingMemoryBound(to: if_data.self)` 读计数
+- [ ] **Step 2: LiveSystemSampler 覆盖** — mib `[CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0]` 两次调用(先估 size 再取);按字节遍历 buffer,仅 `ifm_type == RTM_IFINFO2`;名字:ifm_addrs 含 RTAX_IFP 位时按 RTAX 顺序遍历 sockaddr(步进按 4 字节对齐)取 `sockaddr_dl`,sdl_data+sdl_nlen 取名;计数:`ifm_data.ifd_ibytes/ifd_obytes`(u_int64)
 - [ ] **Step 3: 全量回归** — `./Scripts/test.sh`,预期 375/375 绿(默认实现保证旧假体不破;零新测试——纯逻辑已由 Task 1 覆盖,薄壳靠审)
 - [ ] **Step 4: Commit** — `feat(traffic): SystemSampling 流量接缝与 getifaddrs 采集壳`
 
