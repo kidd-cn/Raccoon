@@ -30,11 +30,12 @@ public struct NetworkTraffic: Equatable, Sendable {
     }
 }
 
-/// 纯组装:白名单累加 getifaddrs 计数条目。仅 `en*` 物理接口参与——
+/// 纯组装:白名单累加接口计数条目。仅 `en*` 物理接口参与——
 /// lo/utun/ipsec/awdl/llw/ap/bridge 等会与真实网卡双计(VPN 隧道、
-/// 链路本地副本、桥接扇出),全部排除。同名接口只计首条:getifaddrs
-/// 对同一接口按地址族(IPv4/IPv6 等)返回多条,计数却是接口级同一份,
-/// 累加会翻倍。无任何匹配返回 nil。真实 getifaddrs 采集不在本层。
+/// 链路本地副本、桥接扇出),全部排除。同名接口只计首条:采集层
+/// 对同一接口按地址族(IPv4/IPv6 等)可能给出多条,计数却是接口级
+/// 同一份,累加会翻倍。无任何匹配返回 nil。真实 sysctl NET_RT_IFLIST2
+/// 采集不在本层(见 AppCore LiveSystemSampler)。
 public func assembleTrafficCounters(_ entries: [(name: String, rx: Int64, tx: Int64)]) -> NetworkTrafficCounters? {
     var seen = Set<String>()
     var rx: Int64 = 0

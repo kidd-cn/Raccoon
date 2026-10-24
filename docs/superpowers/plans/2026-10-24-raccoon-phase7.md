@@ -135,7 +135,7 @@ import MonitorKit
   - `LiveSystemSampler.traffic()`:`sysctl(NET_RT_IFLIST2)` 一次性快照(64 位 `if_data64`,活动监视器同款)→ 解析 `RTM_IFINFO2`/`if_msghdr2`,接口名取自 RTAX_IFP 的 `sockaddr_dl` → `[(name, rx, tx)]` 摊平 → `assembleTrafficCounters`;系统调用失败/解析异常/无 en 接口 → nil。薄壳不单测(注释同 `volumes()` 口径)。**执行注记:首版曾用 getifaddrs(提交 `878941a`),因 AF_LINK 的 `if_data` 计数器为 32 位(单接口 ~4 GiB 回绕,撑不住累计口径)改为 sysctl NET_RT_IFLIST2**
 
 - [ ] **Step 1: 协议加要求 + extension 默认实现**(要求本体与默认实现放一起,注释说明兼容动机)
-- [ ] **Step 2: LiveSystemSampler 覆盖** — mib `[CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0]` 两次调用(先估 size 再取);按字节遍历 buffer,仅 `ifm_type == RTM_IFINFO2`;名字:ifm_addrs 含 RTAX_IFP 位时按 RTAX 顺序遍历 sockaddr(步进按 4 字节对齐)取 `sockaddr_dl`,sdl_data+sdl_nlen 取名;计数:`ifm_data.ifd_ibytes/ifd_obytes`(u_int64)
+- [ ] **Step 2: LiveSystemSampler 覆盖** — mib `[CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0]` 两次调用(先估 size 再取);按字节遍历 buffer,仅 `ifm_type == RTM_IFINFO2`;名字:ifm_addrs 含 RTAX_IFP 位时按 RTAX 顺序遍历 sockaddr(步进按 4 字节对齐)取 `sockaddr_dl`,sdl_data+sdl_nlen 取名;计数:`ifm_data.ifi_ibytes/ifi_obytes`(struct if_data64,u_int64;SDK 实名为 ifi_*)
 - [ ] **Step 3: 全量回归** — `./Scripts/test.sh`,预期 375/375 绿(默认实现保证旧假体不破;零新测试——纯逻辑已由 Task 1 覆盖,薄壳靠审)
 - [ ] **Step 4: Commit** — `feat(traffic): SystemSampling 流量接缝与 getifaddrs 采集壳`
 
