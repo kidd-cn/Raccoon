@@ -218,16 +218,22 @@ final class MutableClock: @unchecked Sendable {
     init(_ now: Date) { self.now = now }
 }
 
-/// 序列时钟:每次读取依序吐出下一个日期,读尽后停驻末位。
-/// 流量差分用例以「每次 refreshFast 恰消费一个日期」钉住实现里 now()
-/// 的单次调用——多调或漏调都会让 elapsed 错位而断言失败。
+/// 序列时钟:每次读取依序吐出下一个日期,读尽后停驻末位。成功拍每次恰消费
+/// 一个日期:成功拍上的多读会挪用后续日期、令后续拍 elapsed 错位而速率断言
+/// 翻转(用例 17/18;用例 16 序列短、单独不捕获),漏读同理;失败拍不读时钟,
+/// 其误读落在驻留分支、不扰动序列,生产侧亦无可见效果,不靠本假体钉住。
 final class DateSequenceClock: @unchecked Sendable {
     private var dates: [Date]
+    private var resident: Date
 
-    init(_ dates: [Date]) { self.dates = dates }
+    init(_ dates: [Date]) {
+        precondition(!dates.isEmpty, "DateSequenceClock 需要至少一个日期")
+        self.dates = dates
+        self.resident = dates[dates.count - 1]
+    }
 
     var now: Date {
-        guard dates.count > 1 else { return dates[0] }
+        guard dates.count > 1 else { return resident }
         return dates.removeFirst()
     }
 }
@@ -575,7 +581,7 @@ final class MenuBarMonitorViewModelTests {
         vm.stop()
     }
 
-    // 16. 流量:首拍无基准不出值;第二拍出累计+速率(序列时钟同时钉住 now() 单次调用)
+    // 16. 流量:首拍无基准不出值;第二拍出累计+速率(序列时钟错位捕获能力见用例 17/18)
     @Test func trafficFirstTickAccumulatesWithoutRate() {
         let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
         let sampler = MenuBarFakeSampler()
