@@ -196,4 +196,51 @@ import MenuBarKit
         let snapshot = MenuBarSnapshot(volumes: [external, system])
         #expect(snapshot.diskVolume == system)
     }
+
+    // MARK: - 流量短格式(spec §3:1024 进制、一位小数、单位单字符)
+
+    @Test func shortRateBytes() {
+        #expect(MenuBarLabelFormatter.shortBytesPerSecond(0) == "0B")
+        #expect(MenuBarLabelFormatter.shortBytesPerSecond(512) == "512B")
+        #expect(MenuBarLabelFormatter.shortBytesPerSecond(1023.9) == "1023B")
+    }
+
+    @Test func shortRateNegativeClampsToZero() {
+        #expect(MenuBarLabelFormatter.shortBytesPerSecond(-5) == "0B")
+    }
+
+    @Test func shortRateKiloMegaGiga() {
+        #expect(MenuBarLabelFormatter.shortBytesPerSecond(1024) == "1.0K")
+        #expect(MenuBarLabelFormatter.shortBytesPerSecond(1536) == "1.5K")
+        #expect(MenuBarLabelFormatter.shortBytesPerSecond(1_048_576) == "1.0M")
+        #expect(MenuBarLabelFormatter.shortBytesPerSecond(1_258_291.2) == "1.2M")
+        #expect(MenuBarLabelFormatter.shortBytesPerSecond(1_288_490_188.8) == "1.2G")
+    }
+
+    @Test func networkLabelPrefersTrafficWhenRatesReady() {
+        let traffic = NetworkTraffic(receivedBytes: 1, sentBytes: 2, receivedBPS: 1536, sentBPS: 512)
+        let snapshot = MenuBarSnapshot(
+            network: NetworkStatus(online: true, interface: .wifi), traffic: traffic)
+        #expect(MenuBarLabelFormatter.label(metric: .network, style: .iconAndValue, snapshot: snapshot)
+            == .traffic(down: "1.5K", up: "512B"))
+    }
+
+    @Test func networkLabelFallsBackWithoutTraffic() {
+        let snapshot = MenuBarSnapshot(network: NetworkStatus(online: true, interface: .wifi))
+        #expect(MenuBarLabelFormatter.label(metric: .network, style: .iconAndValue, snapshot: snapshot)
+            == .network(NetworkStatus(online: true, interface: .wifi)))
+    }
+
+    @Test func networkLabelFallsBackWhenRatesPending() {
+        // 首拍:traffic 在但速率为 nil(无差分基准)→ 回退接口文案
+        let traffic = NetworkTraffic(receivedBytes: 1, sentBytes: 2, receivedBPS: nil, sentBPS: nil)
+        let snapshot = MenuBarSnapshot(
+            network: NetworkStatus(online: false, interface: .other), traffic: traffic)
+        #expect(MenuBarLabelFormatter.label(metric: .network, style: .iconAndValue, snapshot: snapshot)
+            == .network(NetworkStatus(online: false, interface: .other)))
+    }
+
+    @Test func snapshotTrafficDefaultsToNil() {
+        #expect(MenuBarSnapshot().traffic == nil)
+    }
 }

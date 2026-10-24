@@ -20,19 +20,23 @@ public struct MenuBarSnapshot: Equatable, Sendable {
     /// 电池仅供菜单栏面板消费,formatter 不读取——不是死代码。
     public let battery: BatteryInfo?
     public let network: NetworkStatus?
+    /// 本拍网络流量(含可选速率)。速率 nil 表示尚未就绪,formatter 据此回退接口文案。
+    public let traffic: NetworkTraffic?
 
     public init(
         volumes: [VolumeInfo] = [],
         memory: MemoryStats? = nil,
         cpu: CPULoad? = nil,
         battery: BatteryInfo? = nil,
-        network: NetworkStatus? = nil
+        network: NetworkStatus? = nil,
+        traffic: NetworkTraffic? = nil
     ) {
         self.volumes = volumes
         self.memory = memory
         self.cpu = cpu
         self.battery = battery
         self.network = network
+        self.traffic = traffic
     }
 }
 
@@ -63,6 +67,8 @@ public enum MenuBarLabel: Equatable, Sendable {
     case percent(Int)
     /// 网络状态原样透传(nil 表示尚未采集到)
     case network(NetworkStatus?)
+    /// 网络指标速率就绪时的菜单栏短格式,视图渲染为 ↓down ↑up。
+    case traffic(down: String, up: String)
     /// 不显示数值。同时表示 iconOnly 与「无数据」两种情形:
     /// 视图须结合 style 区分渲染——无数据时显示本地化的「—」而非空白。
     case none

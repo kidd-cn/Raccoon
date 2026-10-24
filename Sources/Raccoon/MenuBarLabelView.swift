@@ -61,6 +61,8 @@ struct MenuBarLabelView: View {
             // 在线/离线的标题映射与监控页、下拉面板共用同一 helper。
             guard let status else { return placeholder }
             return interfaceTitle(status)
+        case .traffic(let down, let up):
+            return "↓\(down) ↑\(up)"
         case .none:
             return placeholder
         }
