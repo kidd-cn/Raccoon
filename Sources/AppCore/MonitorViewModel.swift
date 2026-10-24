@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import Observation
 import MonitorKit
 import IOKit.ps
@@ -16,6 +17,13 @@ public protocol SystemSampling: Sendable {
     /// host_processor_info 扁平四元组;取不到 → nil
     func cpuTicks() -> [Int32]?
     func battery() -> BatteryInfo
+    /// 自开机以来各物理接口累计收发字节
+    func traffic() -> NetworkTrafficCounters?
+}
+
+public extension SystemSampling {
+    /// 默认无流量数据:五期既有测试假体零改动兼容,真实覆盖在 LiveSystemSampler。
+    func traffic() -> NetworkTrafficCounters? { nil }
 }
 
 // MARK: - 轮询状态机
@@ -274,6 +282,30 @@ public final class LiveSystemSampler: SystemSampling, Sendable {
                                        onBattery: state == kIOPSBatteryPowerValue)
         }
         return empty
+    }
+
+    /// 自开机以来各物理接口累计收发字节。薄壳不单测(同 volumes() 口径,靠代码审):
+    /// 只做 getifaddrs/freeifaddrs 系统调用与 assembleTrafficCounters 纯函数组装。
+    /// 链表中仅 AF_LINK 条目携带 if_data(接口级计数),其余地址族(IPv4/IPv6 等)
+    /// ifa_data 为 nil,自然跳过;同名接口只保留首条——getifaddrs 对同一接口按
+    /// 地址族返回多条而计数是接口级同一份,先到先得,再交给 assembleTrafficCounters
+    /// 复用同一套 en 白名单去重口径;无任何 en 接口 → nil。
+    public func traffic() -> NetworkTrafficCounters? {
+        var ifap: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifap) == 0, let first = ifap else { return nil }
+        defer { freeifaddrs(ifap) }
+        var byName: [String: (rx: Int64, tx: Int64)] = [:]
+        var cursor: UnsafeMutablePointer<ifaddrs>? = first
+        while let p = cursor {
+            let name = String(cString: p.pointee.ifa_name)
+            if let data = p.pointee.ifa_data, byName[name] == nil {
+                let counters = data.assumingMemoryBound(to: if_data.self).pointee
+                byName[name] = (Int64(counters.ifi_ibytes), Int64(counters.ifi_obytes))
+            }
+            cursor = p.pointee.ifa_next
+        }
+        let entries = byName.map { (name: $0.key, rx: $0.value.rx, tx: $0.value.tx) }
+        return assembleTrafficCounters(entries)
     }
 
     /// IOPS 容量键历史上有 NSNumber/String 两种形态,统一取 Double;
